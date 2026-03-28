@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from io import BytesIO
+from pathlib import Path
+from typing import Iterable
+
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+
+
+def ensure_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def timestamp_to_minute() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+def slugify(text: str, max_length: int = 64) -> str:
+    normalized = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in text.strip())
+    normalized = "_".join(filter(None, normalized.split("_")))
+    return normalized[:max_length] if normalized else "item"
+
+
+def make_timestamped_run_dir(root: Path, prefix: str = "run") -> Path:
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    base = root / f"{prefix}_{stamp}"
+    candidate = base
+    counter = 1
+    while candidate.exists():
+        candidate = root / f"{prefix}_{stamp}_{counter:02d}"
+        counter += 1
+    candidate.mkdir(parents=True, exist_ok=False)
+    return candidate
+
+
+def save_json(path: Path, payload: dict) -> None:
+    ensure_parent(path)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+
+
+def save_csv_records(path: Path, rows: Iterable[dict]) -> None:
+    ensure_parent(path)
+    rows = list(rows)
+    if not rows:
+        path.write_text("", encoding="utf-8")
+        return
+    import pandas as pd
+
+    pd.DataFrame(rows).to_csv(path, index=False, encoding="utf-8-sig")
+
+
+def decode_image_bytes(blob: bytes) -> Image.Image:
+    return Image.open(BytesIO(blob)).convert("RGB")
+
+
+def center_crop_square(image: Image.Image) -> Image.Image:
+    width, height = image.size
+    side = min(width, height)
+    left = (width - side) // 2
+    top = (height - side) // 2
+    return image.crop((left, top, left + side, top + side))
+
+
+def prepare_image(image: Image.Image, size: int) -> Image.Image:
+    return center_crop_square(image).resize((size, size), Image.Resampling.LANCZOS)
+
+
+def image_to_numpy(image: Image.Image | np.ndarray) -> np.ndarray:
+    if isinstance(image, Image.Image):
+        return np.asarray(image.convert("RGB"))
+    array = np.asarray(image)
+    if array.dtype != np.uint8:
+        array = np.clip(array, 0, 255).astype(np.uint8)
+    return array
+
+
+def numpy_to_image(array: np.ndarray) -> Image.Image:
+    return Image.fromarray(image_to_numpy(array))
+
+
+def save_image(path: Path, image: Image.Image | np.ndarray) -> None:
+    ensure_parent(path)
+    numpy_to_image(image).save(path)
+
+
+def normalize_map(array: np.ndarray, eps: float = 1e-6) -> np.ndarray:
+    array = array.astype(np.float32)
+    min_value = float(array.min())
+    max_value = float(array.max())
+    if max_value - min_value < eps:
+        return np.zeros_like(array, dtype=np.float32)
+    return (array - min_value) / (max_value - min_value)
+
+
+def mask_to_rgb(mask: np.ndarray) -> np.ndarray:
+    mask = normalize_map(mask)
+    mask_uint8 = np.clip(mask * 255.0, 0, 255).astype(np.uint8)
+    return np.stack([mask_uint8, mask_uint8, mask_uint8], axis=-1)
+
+
+def make_labeled_strip(images: list[np.ndarray], labels: list[str]) -> np.ndarray:
+    if not images:
+        raise ValueError("images must not be empty")
+    font = ImageFont.load_default()
+    rendered: list[Image.Image] = []
+    label_height = 28
+    for image, label in zip(images, labels):
+        canvas = Image.new("RGB", (image.shape[1], image.shape[0] + label_height), color="white")
+        canvas.paste(numpy_to_image(image), (0, label_height))
+        drawer = ImageDraw.Draw(canvas)
+        drawer.text((8, 6), label, fill="black", font=font)
+        rendered.append(canvas)
+    width = sum(image.width for image in rendered)
+    height = max(image.height for image in rendered)
+    strip = Image.new("RGB", (width, height), color="white")
+    offset = 0
+    for image in rendered:
+        strip.paste(image, (offset, 0))
+        offset += image.width
+    return np.asarray(strip)
+
+
+def summarize_step_maps(step_maps: list[np.ndarray], labels: tuple[str, str, str] = ("early", "mid", "late")) -> np.ndarray | None:
+    if not step_maps:
+        return None
+    indices = [0, len(step_maps) // 2, len(step_maps) - 1]
+    images = [mask_to_rgb(step_maps[index]) for index in indices]
+    return make_labeled_strip(images, list(labels))
