@@ -1,0 +1,33 @@
+# DyMask unified requirements
+#
+# Usage:
+#   pip install -r requirements.txt
+#
+# Notes:
+# - Install PyTorch for your CUDA/CPU environment first if needed.
+# - The current project was validated in a local environment with newer
+#   diffusers/transformers, not the legacy NTIP2P requirements file.
+
+# Core runtime
+torch
+torchvision
+diffusers==0.37.0
+transformers==5.3.0
+ftfy
+
+# Data and metrics
+numpy==2.2.6
+pandas==2.3.3
+pyarrow==23.0.1
+pillow==12.0.0
+scikit-image==0.25.2
+lpips
+
+# Utilities used by NTIP2P / DyMask
+opencv-python==4.13.0
+tqdm==4.67.3
+tensorboard
+ipython
+
+# Optional notebook UI helpers
+ipywidgets
