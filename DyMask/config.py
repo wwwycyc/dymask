@@ -12,12 +12,22 @@ class RuntimeConfig:
     device: str = "cuda"
     dtype: str = "float16"
     image_size: int = 512
-    num_ddim_steps: int = 10
+    num_inversion_steps: int = 10
+    num_edit_steps: int = 10
     guidance_scale: float = 7.5
     local_files_only: bool = True
     attention_slicing: bool = True
     vae_slicing: bool = True
     enable_cpu_offload: bool = False
+
+    @property
+    def num_ddim_steps(self) -> int:
+        return self.num_edit_steps
+
+    @num_ddim_steps.setter
+    def num_ddim_steps(self, value: int) -> None:
+        self.num_inversion_steps = value
+        self.num_edit_steps = value
 
 
 @dataclass

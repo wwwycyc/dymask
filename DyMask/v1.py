@@ -75,6 +75,10 @@ class DDIMInversionBackend:
         inversion.init_prompt(strip_prompt_markup(prompt))
         reconstruction_image, ddim_latents = inversion.ddim_inversion(source_image)
         src_latents = [latent.detach().clone() for latent in reversed(ddim_latents[1:])]
+        inversion_timesteps = [
+            int(timestep.item()) if hasattr(timestep, "item") else int(timestep)
+            for timestep in self.pipe.scheduler.timesteps
+        ]
         return InversionOutput(
             zt_src=ddim_latents[-1].detach().clone(),
             src_latents=src_latents,
@@ -82,7 +86,8 @@ class DDIMInversionBackend:
             null_embeddings=None,
             metadata={
                 "backend": "ddim",
-                "num_ddim_steps": self.runtime.num_ddim_steps,
+                "num_inversion_steps": self.runtime.num_inversion_steps,
+                "inversion_timesteps": inversion_timesteps,
             },
         )
 
@@ -298,9 +303,32 @@ class V1Editor:
 
     def _set_timesteps(self) -> None:
         try:
-            self.pipe.scheduler.set_timesteps(self.config.runtime.num_ddim_steps, device=self.pipe.device)
+            self.pipe.scheduler.set_timesteps(self.config.runtime.num_edit_steps, device=self.pipe.device)
         except TypeError:
-            self.pipe.scheduler.set_timesteps(self.config.runtime.num_ddim_steps)
+            self.pipe.scheduler.set_timesteps(self.config.runtime.num_edit_steps)
+
+    @staticmethod
+    def _resample_source_latents(source_latents: list[torch.Tensor], target_count: int) -> list[torch.Tensor]:
+        if target_count <= 0:
+            return []
+        if not source_latents:
+            raise ValueError("source_latents must not be empty")
+        if len(source_latents) == target_count:
+            return source_latents
+        if len(source_latents) == 1:
+            return [source_latents[0].clone() for _ in range(target_count)]
+
+        positions = np.linspace(0, len(source_latents) - 1, num=target_count)
+        aligned: list[torch.Tensor] = []
+        for position in positions:
+            lower = int(math.floor(position))
+            upper = int(math.ceil(position))
+            if lower == upper:
+                aligned.append(source_latents[lower].clone())
+                continue
+            weight = float(position - lower)
+            aligned.append(source_latents[lower] * (1.0 - weight) + source_latents[upper] * weight)
+        return aligned
 
     @torch.no_grad()
     def _decode_latents(self, latents: torch.Tensor) -> np.ndarray:
@@ -486,11 +514,19 @@ class V1Editor:
         inversion: InversionOutput,
         trace_rows: list[dict[str, float | int]],
         diagnostics_summary: dict[str, object] | None = None,
+        runtime: RuntimeConfig | None = None,
+        source_latent_count: int | None = None,
     ) -> Path:
         deltas = [float(row["delta"]) for row in trace_rows if "delta" in row]
         payload = {
             "method_name": method_name,
             "inversion": inversion.metadata,
+            "runtime": {
+                "num_inversion_steps": runtime.num_inversion_steps if runtime is not None else None,
+                "num_edit_steps": runtime.num_edit_steps if runtime is not None else None,
+            },
+            "source_latent_count_inversion": len(inversion.src_latents),
+            "source_latent_count_edit": source_latent_count,
             "num_steps": len(aux_history),
             "mask_mean_per_step": [float(step["mask"].mean()) for step in aux_history],
             "mask_std_per_step": [float(step["mask"].std()) for step in aux_history],
@@ -517,6 +553,7 @@ class V1Editor:
             latent.to(self.pipe.device, dtype=self.pipe.unet.dtype)
             for latent in inversion.src_latents
         ]
+        source_latents = self._resample_source_latents(source_latents, len(self.pipe.scheduler.timesteps))
         builder = DynamicMaskBuilder(self.config.mask, method_name)
         builder.reset()
         focus_terms = self._extract_focus_terms(sample)
@@ -604,6 +641,8 @@ class V1Editor:
             inversion,
             trace_rows,
             diagnostics_summary=diagnostics_summary,
+            runtime=self.config.runtime,
+            source_latent_count=len(source_latents),
         )
         debug_payload = json.loads(debug_json_path.read_text(encoding="utf-8"))
         debug_payload["focus_terms"] = focus_terms

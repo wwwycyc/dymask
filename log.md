@@ -13300,3 +13300,133 @@
 ```
 结论：当前阶段的可视化、指标、日志和样本留存已齐备。
 下一步：按顺序进入下一阶段，而不是一次性堆叠所有模块。
+
+## 2026-03-29 00:32
+阶段：数据准备
+操作：探测 parquet schema
+输入：
+```json
+{
+  "parquet_path": "D:\\Program\\dymask\\assets\\data\\V1-00000-of-00001.parquet"
+}
+```
+结果：
+```json
+{
+  "parquet_path": "D:\\Program\\dymask\\assets\\data\\V1-00000-of-00001.parquet",
+  "num_rows": 140,
+  "num_row_groups": 2,
+  "column_names": "image, id, source_prompt, target_prompt, edit_action, aspect_mapping, blended_words, mask",
+  "dataset_format": "single_image_prompt_edit",
+  "schema": "<pyarrow._parquet.ParquetSchema object at 0x0000016799F0E600>\nrequired group field_id=-1 schema {\n  optional group field_id=-1 image {\n    optional binary field_id=-1 bytes;\n    optional binary field_id=-1 path (String);\n  }\n  optional binary field_id=-1 id (String);\n  optional binary field_id=-1 source_prompt (String);\n  optional binary field_id=-1 target_prompt (String);\n  optional binary field_id=-1 edit_action (String);\n  optional binary field_id=-1 aspect_mapping (String);\n  optional binary field_id=-1 blended_words (String);\n  optional binary field_id=-1 mask (String);\n}\n"
+}
+```
+结论：已确认数据集字段结构，可用于 source/target 成对抽样。
+下一步：抽样并固化 sample manifest。
+
+## 2026-03-29 00:32
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 1,
+  "sample_seed": 42,
+  "row_indices": [
+    6
+  ],
+  "phase": "custom",
+  "methods": [
+    "target_only"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1\\v1_20260329-0032",
+  "manifest_json": "runs\\dymask_v1\\v1_20260329-0032\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1\\v1_20260329-0032\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_row_000006"
+  ]
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-03-29 00:32
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_row_000006",
+  "source_prompt": "a cup of coffee with drawing of tulip putted on the wooden table",
+  "edit_prompt": "{\"yellow\": {\"position\": 1, \"edit_type\": 6, \"action\": \"+\"}, \"milk\": {\"position\": 3, \"edit_type\": 1, \"action\": \"coffee\"}, \"rose\": {\"position\": 7, \"edit_type\": 1, \"action\": \"tulip\"}}",
+  "target_prompt": "a [yellow] cup of [milk] with drawing of [rose] putted on the wooden table",
+  "methods": [
+    "target_only"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260329-0032\\samples\\sample_000_row_000006"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-03-29 00:32
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_row_000006",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260329-0032\\samples\\sample_000_row_000006\\source_reconstruction.png",
+  "methods": [
+    "target_only"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260329-0032\\samples\\sample_000_row_000006\\target_only\\edited.png"
+  ],
+  "overview_path": null
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-03-29 00:32
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 1,
+  "methods": [
+    "target_only"
+  ]
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1\\v1_20260329-0032\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1\\v1_20260329-0032\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1\\v1_20260329-0032\\metrics_summary.json",
+  "five_method_case_metrics_csv": "runs\\dymask_v1\\v1_20260329-0032\\metrics_five_methods_case_level.csv",
+  "five_method_summary_metrics_csv": "runs\\dymask_v1\\v1_20260329-0032\\metrics_five_methods_summary.csv"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：按顺序进入下一阶段，而不是一次性堆叠所有模块。

@@ -27,7 +27,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-id", default="runwayml/stable-diffusion-v1-5")
     parser.add_argument("--clip-model-id", default="openai/clip-vit-base-patch32")
     parser.add_argument("--image-size", type=int, default=512)
-    parser.add_argument("--num-ddim-steps", type=int, default=20)
+    parser.add_argument("--num-ddim-steps", type=int, default=20, help="Legacy alias: sets both inversion and edit steps unless overridden.")
+    parser.add_argument("--num-inversion-steps", type=int, default=None)
+    parser.add_argument("--num-edit-steps", type=int, default=None)
     parser.add_argument("--guidance-scale", type=float, default=7.5)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--dtype", default="float16")
@@ -38,10 +40,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def build_config(args: argparse.Namespace) -> ExperimentConfig:
     config = ExperimentConfig()
+    legacy_steps = args.num_ddim_steps
     config.runtime.model_id = args.model_id
     config.runtime.clip_model_id = args.clip_model_id
     config.runtime.image_size = args.image_size
-    config.runtime.num_ddim_steps = args.num_ddim_steps
+    config.runtime.num_inversion_steps = args.num_inversion_steps if args.num_inversion_steps is not None else legacy_steps
+    config.runtime.num_edit_steps = args.num_edit_steps if args.num_edit_steps is not None else legacy_steps
     config.runtime.guidance_scale = args.guidance_scale
     config.runtime.device = args.device
     config.runtime.dtype = args.dtype
