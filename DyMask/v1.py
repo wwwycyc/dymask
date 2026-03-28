@@ -365,12 +365,127 @@ class V1Editor:
         return csv_path
 
     @staticmethod
+    def _compute_map_stats(map_array: np.ndarray) -> dict[str, float]:
+        flat = map_array.astype(np.float32).reshape(-1)
+        if flat.size == 0:
+            return {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0,
+                "p05": 0.0,
+                "p10": 0.0,
+                "p50": 0.0,
+                "p90": 0.0,
+                "p95": 0.0,
+                "top10_mean": 0.0,
+                "bottom10_mean": 0.0,
+                "top_bottom_gap": 0.0,
+                "gt_0_5_ratio": 0.0,
+                "entropy": 0.0,
+            }
+
+        p05, p10, p50, p90, p95 = np.quantile(flat, [0.05, 0.10, 0.50, 0.90, 0.95]).tolist()
+        top_values = flat[flat >= p90]
+        bottom_values = flat[flat <= p10]
+        top10_mean = float(top_values.mean()) if top_values.size > 0 else float(flat.mean())
+        bottom10_mean = float(bottom_values.mean()) if bottom_values.size > 0 else float(flat.mean())
+
+        entropy_values = flat
+        if float(flat.min()) < 0.0 or float(flat.max()) > 1.0:
+            min_value = float(flat.min())
+            max_value = float(flat.max())
+            scale = max(max_value - min_value, 1e-6)
+            entropy_values = (flat - min_value) / scale
+        histogram, _ = np.histogram(np.clip(entropy_values, 0.0, 1.0), bins=20, range=(0.0, 1.0))
+        histogram = histogram.astype(np.float64)
+        probabilities = histogram[histogram > 0] / max(float(histogram.sum()), 1.0)
+        entropy = float(-(probabilities * np.log2(probabilities)).sum()) if probabilities.size > 0 else 0.0
+
+        return {
+            "mean": float(flat.mean()),
+            "std": float(flat.std()),
+            "min": float(flat.min()),
+            "max": float(flat.max()),
+            "p05": float(p05),
+            "p10": float(p10),
+            "p50": float(p50),
+            "p90": float(p90),
+            "p95": float(p95),
+            "top10_mean": top10_mean,
+            "bottom10_mean": bottom10_mean,
+            "top_bottom_gap": float(top10_mean - bottom10_mean),
+            "gt_0_5_ratio": float((flat > 0.5).mean()),
+            "entropy": entropy,
+        }
+
+    @classmethod
+    def _write_step_diagnostics(
+        cls,
+        method_dir: Path,
+        method_name: str,
+        aux_history: list[dict[str, np.ndarray]],
+        trace_rows: list[dict[str, float | int]],
+    ) -> tuple[Path | None, Path | None, dict[str, object]]:
+        if not aux_history:
+            return None, None, {}
+
+        diagnostic_rows: list[dict[str, float | int]] = []
+        keys = sorted({key for step in aux_history for key in step.keys()})
+        for step_index, step_payload in enumerate(aux_history):
+            row: dict[str, float | int] = dict(trace_rows[step_index]) if step_index < len(trace_rows) else {"step_idx": step_index}
+            for key in keys:
+                if key not in step_payload:
+                    continue
+                stats = cls._compute_map_stats(step_payload[key])
+                for stat_name, stat_value in stats.items():
+                    row[f"{key}_{stat_name}"] = stat_value
+            diagnostic_rows.append(row)
+
+        summary: dict[str, object] = {}
+        for key in keys:
+            key_rows = [row for row in diagnostic_rows if f"{key}_mean" in row]
+            if not key_rows:
+                continue
+            summary[key] = {
+                "step_count": len(key_rows),
+                "mean_of_mean": float(np.mean([float(row[f"{key}_mean"]) for row in key_rows])),
+                "mean_of_std": float(np.mean([float(row[f"{key}_std"]) for row in key_rows])),
+                "mean_top_bottom_gap": float(np.mean([float(row[f"{key}_top_bottom_gap"]) for row in key_rows])),
+                "mean_active_ratio": float(np.mean([float(row[f"{key}_gt_0_5_ratio"]) for row in key_rows])),
+                "mean_entropy": float(np.mean([float(row[f"{key}_entropy"]) for row in key_rows])),
+                "min_value": float(np.min([float(row[f"{key}_min"]) for row in key_rows])),
+                "max_value": float(np.max([float(row[f"{key}_max"]) for row in key_rows])),
+            }
+
+        mask_summary = summary.get("mask")
+        if isinstance(mask_summary, dict):
+            mean_std = float(mask_summary["mean_of_std"])
+            top_bottom_gap = float(mask_summary["mean_top_bottom_gap"])
+            mask_summary["heuristic_soft_global_like"] = mean_std < 0.05 and top_bottom_gap < 0.25
+
+        csv_path = method_dir / "step_diagnostics.csv"
+        json_path = method_dir / "step_diagnostics.json"
+        save_csv_records(csv_path, diagnostic_rows)
+        save_json(
+            json_path,
+            {
+                "method_name": method_name,
+                "step_count": len(diagnostic_rows),
+                "steps": diagnostic_rows,
+                "summary": summary,
+            },
+        )
+        return csv_path, json_path, summary
+
+    @staticmethod
     def _write_debug_payload(
         method_dir: Path,
         method_name: str,
         aux_history: list[dict[str, np.ndarray]],
         inversion: InversionOutput,
         trace_rows: list[dict[str, float | int]],
+        diagnostics_summary: dict[str, object] | None = None,
     ) -> Path:
         deltas = [float(row["delta"]) for row in trace_rows if "delta" in row]
         payload = {
@@ -383,6 +498,7 @@ class V1Editor:
             "delta_mean": float(np.mean(deltas)) if deltas else None,
             "delta_max": float(np.max(deltas)) if deltas else None,
             "delta_min": float(np.min(deltas)) if deltas else None,
+            "diagnostics_summary": diagnostics_summary or {},
         }
         debug_path = method_dir / "debug.json"
         save_json(debug_path, payload)
@@ -421,13 +537,6 @@ class V1Editor:
             timestep_value = int(timestep.item()) if hasattr(timestep, "item") else int(timestep)
             delta = float(target_stats["delta"])
             print(f"[{sample.sample_id}][{method_name}] {step_idx} {timestep_value} {delta:.6f}")
-            trace_rows.append(
-                {
-                    "step_idx": step_idx,
-                    "timestep": timestep_value,
-                    "delta": delta,
-                }
-            )
             attention_map = aggregate_step_cross_attention(
                 self.attention_store,
                 focus_mask,
@@ -442,6 +551,20 @@ class V1Editor:
             else:
                 mask, aux_tensor = builder.build(eps_src, eps_tar, latents, source_latent, attention_map)
                 eps = eps_src + mask * (eps_tar - eps_src)
+
+            src_tar_gap = float(torch.abs(eps_tar - eps_src).mean().item())
+            applied_gap = float(torch.abs(eps - eps_src).mean().item())
+            blend_strength = applied_gap / src_tar_gap if src_tar_gap > 1e-8 else 0.0
+            trace_rows.append(
+                {
+                    "step_idx": step_idx,
+                    "timestep": timestep_value,
+                    "delta": delta,
+                    "src_tar_gap": src_tar_gap,
+                    "applied_gap": applied_gap,
+                    "blend_strength": float(blend_strength),
+                }
+            )
 
             scheduler_output = self.pipe.scheduler.step(eps, timestep, latents)
             latents = scheduler_output.prev_sample
@@ -468,7 +591,20 @@ class V1Editor:
         aux_summary_path = self._save_aux_outputs(aux_history, method_dir)
         self._save_selected_step_outputs(aux_history, method_dir)
         delta_trace_path = self._write_delta_trace(method_dir, trace_rows)
-        debug_json_path = self._write_debug_payload(method_dir, method_name, aux_history, inversion, trace_rows)
+        diagnostics_csv_path, diagnostics_json_path, diagnostics_summary = self._write_step_diagnostics(
+            method_dir,
+            method_name,
+            aux_history,
+            trace_rows,
+        )
+        debug_json_path = self._write_debug_payload(
+            method_dir,
+            method_name,
+            aux_history,
+            inversion,
+            trace_rows,
+            diagnostics_summary=diagnostics_summary,
+        )
         debug_payload = json.loads(debug_json_path.read_text(encoding="utf-8"))
         debug_payload["focus_terms"] = focus_terms
         save_json(debug_json_path, debug_payload)
@@ -481,6 +617,8 @@ class V1Editor:
             mask_summary_path=mask_summary_path,
             aux_summary_path=aux_summary_path,
             delta_trace_path=delta_trace_path,
+            diagnostics_csv_path=diagnostics_csv_path,
+            diagnostics_json_path=diagnostics_json_path,
             debug_json_path=debug_json_path,
         )
 

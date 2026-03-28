@@ -152,13 +152,24 @@ class MetricRunner:
             except Exception as exc:
                 metrics["clip_score"] = None
                 metrics["clip_score_error"] = str(exc)
-        reference_image = reference_edited if reference_edited is not None else source_image
-        metrics["edit_reference_mode"] = "target_reference" if reference_edited is not None else "source_image"
+
         if self.metric_config.enable_psnr:
-            metrics["edit_ref_psnr"] = self.compute_psnr(reference_image, edited_image)
+            metrics["edit_source_psnr"] = self.compute_psnr(source_image, edited_image)
         if self.metric_config.enable_lpips:
             try:
-                metrics["edit_ref_lpips"] = self.compute_lpips(reference_image, edited_image)
+                metrics["edit_source_lpips"] = self.compute_lpips(source_image, edited_image)
+            except Exception as exc:
+                metrics["edit_source_lpips"] = None
+                metrics["edit_source_lpips_error"] = str(exc)
+
+        metrics["edit_reference_mode"] = "target_reference" if reference_edited is not None else "missing"
+        metrics["edit_ref_psnr"] = None
+        metrics["edit_ref_lpips"] = None
+        if reference_edited is not None and self.metric_config.enable_psnr:
+            metrics["edit_ref_psnr"] = self.compute_psnr(reference_edited, edited_image)
+        if reference_edited is not None and self.metric_config.enable_lpips:
+            try:
+                metrics["edit_ref_lpips"] = self.compute_lpips(reference_edited, edited_image)
             except Exception as exc:
                 metrics["edit_ref_lpips"] = None
                 metrics["edit_ref_lpips_error"] = str(exc)

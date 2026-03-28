@@ -72,5 +72,7 @@ class MethodResult:
     mask_summary_path: Path | None
     aux_summary_path: Path | None
     delta_trace_path: Path | None
+    diagnostics_csv_path: Path | None
+    diagnostics_json_path: Path | None
     debug_json_path: Path
     metrics: dict[str, float | None] = field(default_factory=dict)

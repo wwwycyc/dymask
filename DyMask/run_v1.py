@@ -268,9 +268,12 @@ def write_five_method_metric_tables(run_dir: Path, case_rows: list[dict]) -> tup
             {
                 "sample_id": row.get("sample_id"),
                 "method_name": display_method_name(canonical_name),
+                "edit_reference_mode": row.get("edit_reference_mode"),
                 "clip_score": row.get("clip_score"),
-                "lpips": row.get("edit_ref_lpips"),
-                "psnr": row.get("edit_ref_psnr"),
+                "target_lpips": row.get("edit_ref_lpips"),
+                "target_psnr": row.get("edit_ref_psnr"),
+                "source_lpips": row.get("edit_source_lpips"),
+                "source_psnr": row.get("edit_source_psnr"),
             }
         )
 
@@ -292,12 +295,17 @@ def write_five_method_metric_tables(run_dir: Path, case_rows: list[dict]) -> tup
             {
                 "method_name": display_name,
                 "sample_count": len(method_rows),
+                "target_reference_count": sum(1 for row in method_rows if row["edit_reference_mode"] == "target_reference"),
                 "clip_score_mean": _metric_mean([row["clip_score"] for row in method_rows]),
                 "clip_score_std": _metric_std([row["clip_score"] for row in method_rows]),
-                "lpips_mean": _metric_mean([row["lpips"] for row in method_rows]),
-                "lpips_std": _metric_std([row["lpips"] for row in method_rows]),
-                "psnr_mean": _metric_mean([row["psnr"] for row in method_rows]),
-                "psnr_std": _metric_std([row["psnr"] for row in method_rows]),
+                "target_lpips_mean": _metric_mean([row["target_lpips"] for row in method_rows]),
+                "target_lpips_std": _metric_std([row["target_lpips"] for row in method_rows]),
+                "target_psnr_mean": _metric_mean([row["target_psnr"] for row in method_rows]),
+                "target_psnr_std": _metric_std([row["target_psnr"] for row in method_rows]),
+                "source_lpips_mean": _metric_mean([row["source_lpips"] for row in method_rows]),
+                "source_lpips_std": _metric_std([row["source_lpips"] for row in method_rows]),
+                "source_psnr_mean": _metric_mean([row["source_psnr"] for row in method_rows]),
+                "source_psnr_std": _metric_std([row["source_psnr"] for row in method_rows]),
             }
         )
 
@@ -457,6 +465,8 @@ def main() -> None:
                 "mask_summary_path": str(method_result.mask_summary_path) if method_result.mask_summary_path else None,
                 "aux_summary_path": str(method_result.aux_summary_path) if method_result.aux_summary_path else None,
                 "delta_trace_path": str(method_result.delta_trace_path) if method_result.delta_trace_path else None,
+                "diagnostics_csv_path": str(method_result.diagnostics_csv_path) if method_result.diagnostics_csv_path else None,
+                "diagnostics_json_path": str(method_result.diagnostics_json_path) if method_result.diagnostics_json_path else None,
                 "debug_json_path": str(method_result.debug_json_path),
             }
             case_rows.append(row)
