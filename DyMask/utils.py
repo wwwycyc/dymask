@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 
 def ensure_parent(path: Path) -> None:
@@ -129,3 +129,58 @@ def summarize_step_maps(step_maps: list[np.ndarray], labels: tuple[str, str, str
     indices = [0, len(step_maps) // 2, len(step_maps) - 1]
     images = [mask_to_rgb(step_maps[index]) for index in indices]
     return make_labeled_strip(images, list(labels))
+
+
+def compose_labeled_overview(
+    items: list[tuple[str, Image.Image | np.ndarray]],
+    columns: int = 4,
+    tile_size: tuple[int, int] = (512, 512),
+    title: str | None = None,
+) -> np.ndarray:
+    if not items:
+        raise ValueError("items must not be empty")
+
+    columns = max(1, columns)
+    tile_width, tile_height = tile_size
+    label_height = 32
+    gap = 16
+    outer_padding = 20
+    rows = (len(items) + columns - 1) // columns
+    canvas_width = outer_padding * 2 + columns * tile_width + (columns - 1) * gap
+    title_height = 0 if not title else 48
+    row_height = tile_height + label_height
+    canvas_height = outer_padding * 2 + title_height + rows * row_height + (rows - 1) * gap
+
+    canvas = Image.new("RGB", (canvas_width, canvas_height), color="white")
+    drawer = ImageDraw.Draw(canvas)
+    font = ImageFont.load_default()
+
+    if title:
+        drawer.text((outer_padding, outer_padding), title, fill="black", font=font)
+
+    start_y = outer_padding + title_height
+    inner_padding = 8
+    content_width = tile_width - inner_padding * 2
+    content_height = tile_height - inner_padding * 2
+
+    for index, (label, image) in enumerate(items):
+        row = index // columns
+        col = index % columns
+        x = outer_padding + col * (tile_width + gap)
+        y = start_y + row * (row_height + gap)
+
+        drawer.rectangle(
+            (x, y, x + tile_width - 1, y + label_height + tile_height - 1),
+            outline="black",
+            width=1,
+        )
+        drawer.text((x + 8, y + 8), label, fill="black", font=font)
+
+        tile = Image.new("RGB", (content_width, content_height), color="white")
+        fitted = ImageOps.contain(numpy_to_image(image), (content_width, content_height))
+        offset_x = (content_width - fitted.width) // 2
+        offset_y = (content_height - fitted.height) // 2
+        tile.paste(fitted, (offset_x, offset_y))
+        canvas.paste(tile, (x + inner_padding, y + label_height + inner_padding))
+
+    return np.asarray(canvas)

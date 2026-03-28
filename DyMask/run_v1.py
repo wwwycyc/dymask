@@ -18,7 +18,7 @@ from DyMask.data import MagicBrushParquetDataset
 from DyMask.logging_utils import MarkdownExperimentLogger
 from DyMask.metrics import MetricRunner
 from DyMask.schemas import MaterializedSample, SampleManifestEntry
-from DyMask.utils import make_timestamped_run_dir, save_csv_records, save_json
+from DyMask.utils import compose_labeled_overview, make_timestamped_run_dir, save_csv_records, save_image, save_json
 from DyMask.v1 import V1Editor
 
 
@@ -29,6 +29,22 @@ PHASE_METHODS = {
     "phase3": ("discrepancy_only",),
     "phase4": ("discrepancy_attention",),
     "phase5": ("full_dynamic_mask",),
+}
+
+OVERVIEW_METHODS = (
+    "target_only",
+    "global_blend",
+    "discrepancy_only",
+    "discrepancy_attention",
+    "full_dynamic_mask",
+)
+
+METHOD_DISPLAY_NAMES = {
+    "target_only": "target-only",
+    "global_blend": "global blend",
+    "discrepancy_only": "D_t",
+    "discrepancy_attention": "D_t + A_t",
+    "full_dynamic_mask": "Full",
 }
 
 
@@ -178,6 +194,117 @@ def phase_title(phase: str) -> str:
         "custom": "Custom 多方法运行",
     }
     return titles.get(phase, phase)
+
+
+def canonical_method_name(method_name: str) -> str:
+    return "global_blend" if method_name.startswith("global_blend") else method_name
+
+
+def display_method_name(method_name: str) -> str:
+    return METHOD_DISPLAY_NAMES.get(canonical_method_name(method_name), method_name)
+
+
+def build_sample_overview(
+    sample: MaterializedSample,
+    method_results: list,
+    image_size: int,
+) -> Path | None:
+    result_by_method = {
+        canonical_method_name(result.method_name): result
+        for result in method_results
+    }
+    if not all(method in result_by_method for method in OVERVIEW_METHODS):
+        return None
+
+    items: list[tuple[str, np.ndarray]] = [
+        ("source", np.asarray(Image.open(sample.source_image_path).convert("RGB"))),
+    ]
+    for method_name in OVERVIEW_METHODS:
+        result = result_by_method[method_name]
+        items.append((display_method_name(method_name), np.asarray(Image.open(result.edited_image_path).convert("RGB"))))
+
+    full_result = result_by_method["full_dynamic_mask"]
+    if full_result.aux_summary_path is None or not Path(full_result.aux_summary_path).exists():
+        return None
+    items.append(("D/A/C/mask maps", np.asarray(Image.open(full_result.aux_summary_path).convert("RGB"))))
+
+    overview = compose_labeled_overview(
+        items,
+        columns=4,
+        tile_size=(image_size, image_size),
+        title=sample.sample_id,
+    )
+    overview_path = sample.sample_dir / "overview.png"
+    save_image(overview_path, overview)
+    return overview_path
+
+
+def _metric_mean(values: list[float | None]) -> float | None:
+    numeric = [float(value) for value in values if value is not None]
+    if not numeric:
+        return None
+    return float(np.mean(numeric))
+
+
+def _metric_std(values: list[float | None]) -> float | None:
+    numeric = [float(value) for value in values if value is not None]
+    if not numeric:
+        return None
+    return float(np.std(numeric, ddof=0))
+
+
+def write_five_method_metric_tables(run_dir: Path, case_rows: list[dict]) -> tuple[Path, Path]:
+    ordered_methods = list(OVERVIEW_METHODS)
+    filtered_rows: list[dict[str, object]] = []
+
+    for row in case_rows:
+        method_name = row.get("method_name")
+        if not isinstance(method_name, str):
+            continue
+        canonical_name = canonical_method_name(method_name)
+        if canonical_name not in OVERVIEW_METHODS:
+            continue
+        filtered_rows.append(
+            {
+                "sample_id": row.get("sample_id"),
+                "method_name": display_method_name(canonical_name),
+                "clip_score": row.get("clip_score"),
+                "lpips": row.get("edit_ref_lpips"),
+                "psnr": row.get("edit_ref_psnr"),
+            }
+        )
+
+    filtered_rows.sort(
+        key=lambda row: (
+            str(row["sample_id"]),
+            ordered_methods.index(next(name for name, label in METHOD_DISPLAY_NAMES.items() if label == row["method_name"])),
+        )
+    )
+
+    case_table_path = run_dir / "metrics_five_methods_case_level.csv"
+    save_csv_records(case_table_path, filtered_rows)
+
+    summary_rows: list[dict[str, object]] = []
+    for method_name in ordered_methods:
+        display_name = display_method_name(method_name)
+        method_rows = [row for row in filtered_rows if row["method_name"] == display_name]
+        summary_rows.append(
+            {
+                "method_name": display_name,
+                "sample_count": len(method_rows),
+                "clip_score_mean": _metric_mean([row["clip_score"] for row in method_rows]),
+                "clip_score_std": _metric_std([row["clip_score"] for row in method_rows]),
+                "lpips_mean": _metric_mean([row["lpips"] for row in method_rows]),
+                "lpips_std": _metric_std([row["lpips"] for row in method_rows]),
+                "psnr_mean": _metric_mean([row["psnr"] for row in method_rows]),
+                "psnr_std": _metric_std([row["psnr"] for row in method_rows]),
+            }
+        )
+
+    summary_table_path = run_dir / "metrics_five_methods_summary.csv"
+    save_csv_records(summary_table_path, summary_rows)
+    save_json(run_dir / "metrics_five_methods_summary.json", {"summary": summary_rows})
+    return case_table_path, summary_table_path
 
 
 def main() -> None:
@@ -334,6 +461,8 @@ def main() -> None:
             }
             case_rows.append(row)
 
+        overview_path = build_sample_overview(sample, method_results, config.runtime.image_size)
+
         logger.log(
             stage=phase_title(config.phase),
             operation="单样本阶段验证完成",
@@ -342,6 +471,7 @@ def main() -> None:
                 "reconstruction_path": str(sample.sample_dir / "source_reconstruction.png"),
                 "methods": [result.method_name for result in method_results],
                 "artifacts": [str(result.edited_image_path) for result in method_results],
+                "overview_path": str(overview_path) if overview_path else None,
             },
             conclusion="该样本已保存固定产物和阶段产物，可进入下一样本或汇总。",
             next_step="继续剩余样本，或检查 summary 指标和中间图。",
@@ -354,6 +484,7 @@ def main() -> None:
         summary_rows = metric_runner.summarize(case_rows)
         save_csv_records(run_dir / "metrics_summary.csv", summary_rows)
         save_json(run_dir / "metrics_summary.json", {"summary": summary_rows})
+    five_method_case_table_path, five_method_summary_table_path = write_five_method_metric_tables(run_dir, case_rows)
 
     logger.log(
         stage="实验汇总",
@@ -367,6 +498,8 @@ def main() -> None:
             "case_metrics_csv": str(metrics_path),
             "summary_metrics_csv": str(run_dir / "metrics_summary.csv"),
             "summary_metrics_json": str(run_dir / "metrics_summary.json"),
+            "five_method_case_metrics_csv": str(five_method_case_table_path),
+            "five_method_summary_metrics_csv": str(five_method_summary_table_path),
         },
         conclusion="当前阶段的可视化、指标、日志和样本留存已齐备。",
         next_step="按顺序进入下一阶段，而不是一次性堆叠所有模块。",
