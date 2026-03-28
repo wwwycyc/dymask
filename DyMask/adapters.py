@@ -60,7 +60,9 @@ def configure_ntip2p_module(module, pipe: StableDiffusionPipeline, runtime: Runt
     module.prompts = []
     module.NUM_DDIM_STEPS = runtime.num_ddim_steps
     module.GUIDANCE_SCALE = runtime.guidance_scale
-    module.LOW_RESOURCE = True
+    # We use batched CFG in DyMask, so attention controllers should treat the
+    # second half of the batch as the conditional branch.
+    module.LOW_RESOURCE = False
 
 
 def clear_cuda_memory() -> None:

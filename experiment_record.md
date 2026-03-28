@@ -662,6 +662,92 @@ print(type(src_latents), len(src_latents), src_latents[0].shape)
 - 现在这个数据源已经可以直接进入后续 Phase 3/4/5
 - 如果要继续在这个新数据源上做机制验证，建议先从 `Phase 2 -> Phase 3` 沿同一批 8 样本推进
 
+### 补充说明：无 `target_reference` 时的指标解释
+- 新 parquet 没有编辑后参考图，因此：
+  - `edit_ref_psnr`
+  - `edit_ref_lpips`
+  不再表示“与目标图的接近程度”
+- 现在它们改为对 `source.png` 计算：
+  - `edit_ref_psnr` 越高，表示结果越接近原图，改动越保守
+  - `edit_ref_lpips` 越低，表示结果越接近原图，改动越保守
+- 因此在新 parquet 上：
+  - `clip_score` 主要看是否朝 target prompt 走
+  - `edit_ref_psnr / lpips` 主要看是否偏离原图太多
+
+### 新 parquet 上沿同一批 8 样本的阶段结果
+
+使用样本：
+- row indices：`6, 26, 28, 35, 57, 62, 70, 139`
+
+#### 总览图
+- `Phase 2`: `runs/dymask_v1/phase2_20260328-1912/phase2_overview.png`
+- `Phase 3`: `runs/dymask_v1/phase3_20260328-1932/phase3_overview.png`
+- `Phase 4`: `runs/dymask_v1/phase4_20260328-2006/phase4_overview.png`
+- `Phase 5`: `runs/dymask_v1/phase5_20260328-2009/phase5_overview.png`
+
+#### 汇总指标表
+
+| 方法 | clip_score_mean | source-ref PSNR | source-ref LPIPS |
+| --- | ---: | ---: | ---: |
+| target_only | 0.3294 | 14.9608 | 0.5204 |
+| global_blend_0.3 | 0.3065 | 18.9051 | 0.3793 |
+| global_blend_0.5 | 0.3163 | 17.3127 | 0.4366 |
+| global_blend_0.7 | 0.3256 | 16.1160 | 0.4724 |
+| discrepancy_only | 0.3082 | 18.4601 | 0.3753 |
+| discrepancy_attention | 0.2936 | 20.4253 | 0.3149 |
+| full_dynamic_mask | 0.2970 | 20.0472 | 0.3274 |
+
+#### 当前观察
+- 新 parquet 上，`target_only` 语义最强，但偏离原图也最大
+- `global_blend_0.7` 仍然是最接近 `target_only` 的简单 baseline
+- `discrepancy_only` 比 `global_blend_0.7` 更保守，但语义更弱
+- `discrepancy_attention` 和 `full_dynamic_mask` 都继续往“更保守”方向走
+- 这意味着在这个数据源上，`A_t` 和 `C_t` 目前没有把保守性转化成更强的目标语义
+
+#### 当前结论
+- 新 parquet 上，这套 `D_t / A_t / C_t` 当前版本还没有打赢 `Phase 2`
+- 如果继续优化，优先方向应是：
+  - 修正 `A_t` 的 token 选择与 cond branch 提取
+  - 调 `threshold / temperature / alpha / beta / gamma`
+
+### 补充记录：修复 A_t 后在新 parquet 上重跑
+- 核心修复：
+  - inversion 结束后重新挂回 attention controller
+  - `A_t` 聚合优先只看编辑相关词
+  - 单样本 probe 已确认不再是全黑 attention
+- 单样本 probe 目录：
+  - `runs/attention_probe/attention_20260328-2117`
+
+#### 修复后新 parquet 的阶段结果
+
+| 方法 | clip_score_mean | source-ref PSNR | source-ref LPIPS |
+| --- | ---: | ---: | ---: |
+| discrepancy_only | 0.3082 | 18.4601 | 0.3753 |
+| discrepancy_attention | 0.3122 | 18.3850 | 0.3861 |
+| full_dynamic_mask | 0.3148 | 18.0504 | 0.3980 |
+
+#### 当前观察
+- 修好 `A_t` 之后：
+  - `Phase 4` 的 `clip_score` 从 `0.2936` 提升到 `0.3122`
+  - `Phase 5` 的 `clip_score` 提升到 `0.3148`
+- 说明之前 `A_t` 全黑确实是实现问题，而不是 attention prior 完全无效
+- 修复后趋势变成：
+  - `D_t only` 最保守
+  - `D_t + A_t` 语义增强
+  - `D_t + A_t + C_t` 再进一步增强一点语义，但也更偏离原图
+
+#### 当前结论更新
+- 修复后的 `A_t` 是有效的
+- 在新 parquet 上：
+  - `Phase 4` 现在已经优于旧版 `Phase 4`
+  - `Phase 5` 也优于旧版 `Phase 5`
+- 但即便如此，它们暂时还是没有超过 `Phase 2 global_blend_0.7`
+- 所以下一步如果继续优化，最合理的是围绕：
+  - `A_t` 权重
+  - `C_t` 权重
+  - `threshold / temperature`
+  做小范围调参，而不是再加新模块
+
 ---
 
 ## Phase 3：仅 `D_t`
@@ -766,6 +852,38 @@ print(type(src_latents), len(src_latents), src_latents[0].shape)
   - `A_t` 对 `D_t only` 是有帮助的，但当前提升幅度不大
 - 也就是说，`A_t` 现在更像是在做细化和稳态修正，而不是带来根本性的编辑能力提升
 - 下一步应进入 `Phase 5`，看 `C_t` 是否还能进一步减少无关区域漂移
+
+### 补充记录：修复 A_t 提取链路
+- 发现问题：
+  - inversion 之后 attention controller 没重新挂回去
+  - 导致 `Phase 4/5` 里的 `A_t` 基本为空，单独可视化时图几乎全黑
+- 修复内容：
+  - 在 inversion 完成后，重新执行 `register_attention_control(self.pipe, self.attention_store)`
+  - attention probe 现在改为优先只看编辑词：
+    - 例如 `toy / cat / fur`
+- 单样本 probe：
+  - 目录：`runs/attention_probe/attention_20260328-2117`
+  - 总览图：`runs/attention_probe/attention_20260328-2117/samples/sample_000_row_000026/attention_only/attention_overview.png`
+  - 现在单步 attention 图不再是 91 字节的全黑图，而是有几 KB 的正常图片
+
+### 补充记录：修复后重新运行新 parquet 的 Phase 4
+- 运行目录：`runs/dymask_v1/phase4_20260328-2119`
+- 总览图：`runs/dymask_v1/phase4_20260328-2119/phase4_overview.png`
+
+#### 修复前后对比
+
+| 版本 | clip_score_mean | source-ref PSNR | source-ref LPIPS |
+| --- | ---: | ---: | ---: |
+| 修复前 `discrepancy_attention` | 0.2936 | 20.4253 | 0.3149 |
+| 修复后 `discrepancy_attention` | 0.3122 | 18.3850 | 0.3861 |
+
+#### 当前结论更新
+- 修好 `A_t` 以后，`Phase 4` 有明显改善：
+  - `clip_score` 从 `0.2936 -> 0.3122`
+  - 说明之前全黑 `A_t` 确实是实现问题，不是 attention prior 本身没用
+- 同时保持性有所下降：
+  - 说明 `A_t` 现在终于在推动编辑，而不是只做保守约束
+- 当前修复后的 `Phase 4` 已经比 `Phase 3` 更有说服力
 
 ---
 

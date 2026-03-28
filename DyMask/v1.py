@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
+import re
 
 import numpy as np
 import torch
@@ -55,6 +57,10 @@ class PromptEncoder:
         return condition
 
 
+def strip_prompt_markup(prompt: str) -> str:
+    return prompt.replace("[", "").replace("]", "")
+
+
 class DDIMInversionBackend:
     def __init__(self, pipe, runtime: RuntimeConfig) -> None:
         self.pipe = pipe
@@ -66,7 +72,7 @@ class DDIMInversionBackend:
     def invert(self, source_image: np.ndarray, prompt: str) -> InversionOutput:
         self.ntip2p.ptp_utils.register_attention_control(self.pipe, None)
         inversion = self.ntip2p.NullInversion(self.pipe)
-        inversion.init_prompt(prompt)
+        inversion.init_prompt(strip_prompt_markup(prompt))
         reconstruction_image, ddim_latents = inversion.ddim_inversion(source_image)
         src_latents = [latent.detach().clone() for latent in reversed(ddim_latents[1:])]
         return InversionOutput(
@@ -226,6 +232,70 @@ class V1Editor:
         self.attention_store = self.ntip2p.AttentionStore()
         self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
 
+    def _extract_focus_terms(self, sample: MaterializedSample) -> list[str]:
+        terms: list[str] = []
+        bracket_terms = re.findall(r"\[([^\]]+)\]", sample.target_prompt)
+        terms.extend(term.strip() for term in bracket_terms if term.strip())
+
+        extras = sample.extras or {}
+        blended_words = extras.get("blended_words")
+        if blended_words:
+            try:
+                entries = json.loads(blended_words)
+                for entry in entries:
+                    if not isinstance(entry, str):
+                        continue
+                    parts = [part.strip() for part in entry.split(",")]
+                    if len(parts) == 2 and parts[1] and parts[1] != parts[0]:
+                        terms.append(parts[1])
+            except Exception:
+                pass
+
+        if not terms:
+            try:
+                edit_payload = json.loads(sample.edit_prompt)
+                if isinstance(edit_payload, dict):
+                    for key in edit_payload.keys():
+                        if key and isinstance(key, str):
+                            terms.append(key.strip("[] "))
+            except Exception:
+                pass
+
+        if not terms:
+            source_words = set(strip_prompt_markup(sample.source_prompt).split())
+            target_words = strip_prompt_markup(sample.target_prompt).split()
+            terms.extend([word for word in target_words if word not in source_words])
+
+        deduped: list[str] = []
+        for term in terms:
+            clean = term.strip()
+            if clean and clean not in deduped:
+                deduped.append(clean)
+        return deduped
+
+    def _build_focus_token_mask(self, target_condition: TextCondition, focus_terms: list[str]) -> torch.Tensor:
+        tokenizer = self.pipe.tokenizer
+        prompt_variants = [target_condition.prompt, strip_prompt_markup(target_condition.prompt)]
+        focus_mask = torch.zeros_like(target_condition.token_mask, dtype=torch.bool)
+
+        for term in focus_terms:
+            term_variants = [term, term.strip("[] "), f"[{term.strip('[] ')}]"]
+            split_terms = [piece for piece in term.replace("[", "").replace("]", "").split() if piece]
+            term_variants.extend(split_terms)
+            found_any = False
+            for prompt in prompt_variants:
+                for variant in term_variants:
+                    inds = self.ntip2p.ptp_utils.get_word_inds(prompt, variant, tokenizer)
+                    if len(inds) > 0:
+                        focus_mask[:, torch.as_tensor(inds, device=focus_mask.device)] = True
+                        found_any = True
+                if found_any:
+                    break
+
+        if not focus_mask.any():
+            return target_condition.token_mask
+        return focus_mask
+
     def _set_timesteps(self) -> None:
         try:
             self.pipe.scheduler.set_timesteps(self.config.runtime.num_ddim_steps, device=self.pipe.device)
@@ -333,6 +403,8 @@ class V1Editor:
         ]
         builder = DynamicMaskBuilder(self.config.mask, method_name)
         builder.reset()
+        focus_terms = self._extract_focus_terms(sample)
+        focus_mask = self._build_focus_token_mask(target_condition, focus_terms)
 
         aux_history: list[dict[str, np.ndarray]] = []
         mask_history: list[np.ndarray] = []
@@ -358,7 +430,7 @@ class V1Editor:
             )
             attention_map = aggregate_step_cross_attention(
                 self.attention_store,
-                target_condition.token_mask,
+                focus_mask,
                 target_hw=(latents.shape[-2], latents.shape[-1]),
                 locations=self.config.mask.attention_locations,
             )
@@ -397,6 +469,9 @@ class V1Editor:
         self._save_selected_step_outputs(aux_history, method_dir)
         delta_trace_path = self._write_delta_trace(method_dir, trace_rows)
         debug_json_path = self._write_debug_payload(method_dir, method_name, aux_history, inversion, trace_rows)
+        debug_payload = json.loads(debug_json_path.read_text(encoding="utf-8"))
+        debug_payload["focus_terms"] = focus_terms
+        save_json(debug_json_path, debug_payload)
         clear_cuda_memory()
 
         return MethodResult(
@@ -409,9 +484,72 @@ class V1Editor:
             debug_json_path=debug_json_path,
         )
 
+    def visualize_attention_only(self, sample: MaterializedSample, output_dir: Path) -> Path:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self._set_timesteps()
+
+        source_image = self._load_sample_image(sample.source_image_path)
+        inversion = self.inversion_backend.invert(source_image, sample.source_prompt)
+        self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
+        target_condition = self.prompt_encoder.encode(sample.target_prompt)
+        focus_terms = self._extract_focus_terms(sample)
+        focus_mask = self._build_focus_token_mask(target_condition, focus_terms)
+
+        latents = inversion.zt_src.detach().clone().to(self.pipe.device, dtype=self.pipe.unet.dtype)
+        attention_history: list[np.ndarray] = []
+        trace_rows: list[dict[str, float | int]] = []
+
+        for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
+            self.attention_store.reset()
+            eps_tar, target_stats = self.target_predictor.predict(latents, timestep, target_condition)
+            timestep_value = int(timestep.item()) if hasattr(timestep, "item") else int(timestep)
+            delta = float(target_stats["delta"])
+            print(f"[attention_only][{sample.sample_id}] {step_idx} {timestep_value} {delta:.6f}")
+            attention_map = aggregate_step_cross_attention(
+                self.attention_store,
+                focus_mask,
+                target_hw=(latents.shape[-2], latents.shape[-1]),
+                locations=self.config.mask.attention_locations,
+            )
+            attention_np = attention_map.detach().float().cpu().numpy()[0]
+            attention_history.append(attention_np)
+            trace_rows.append({"step_idx": step_idx, "timestep": timestep_value, "delta": delta})
+            latents = self.pipe.scheduler.step(eps_tar, timestep, latents).prev_sample
+
+        selected_dir = output_dir / "selected_steps"
+        selected_dir.mkdir(parents=True, exist_ok=True)
+        step_count = min(self.config.mask.selected_step_count, len(attention_history))
+        indices = np.linspace(0, len(attention_history) - 1, num=step_count, dtype=int).tolist()
+        manifest: dict[str, str] = {}
+        for index in indices:
+            label = f"step_{index:02d}"
+            path = selected_dir / f"{label}_attention.png"
+            save_image(path, mask_to_rgb(attention_history[index]))
+            manifest[label] = str(path)
+
+        overview = summarize_step_maps(attention_history)
+        overview_path = output_dir / "attention_overview.png"
+        if overview is not None:
+            save_image(overview_path, overview)
+
+        save_csv_records(output_dir / "delta_trace.csv", trace_rows)
+        save_json(
+            output_dir / "attention_debug.json",
+            {
+                "sample_id": sample.sample_id,
+                "source_prompt": sample.source_prompt,
+                "target_prompt": sample.target_prompt,
+                "focus_terms": focus_terms,
+                "selected_steps": manifest,
+                "delta_trace_path": str(output_dir / "delta_trace.csv"),
+            },
+        )
+        return overview_path
+
     def run_sample(self, sample: MaterializedSample) -> tuple[InversionOutput, list[MethodResult]]:
         source_image = self._load_sample_image(sample.source_image_path)
         inversion = self.inversion_backend.invert(source_image, sample.source_prompt)
+        self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
         save_image(sample.sample_dir / "source_reconstruction.png", inversion.reconstruction_image)
         save_json(sample.sample_dir / "inversion.json", inversion.metadata)
         if self.config.save_inversion_tensors:
