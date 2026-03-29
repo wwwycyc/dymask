@@ -54,6 +54,27 @@ If you want to use the local existing environment explicitly:
 & 'E:\Anaconda_envs\envs\imgedit\python.exe' ...
 ```
 
+## Installation
+Install PyTorch first, according to your environment.
+
+CUDA 12.1 example:
+
+```powershell
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+```
+
+CPU example:
+
+```powershell
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+```
+
+Then install the remaining project dependencies:
+
+```powershell
+pip install -r requirements.txt
+```
+
 ## Help
 ```powershell
 python DyMask/run_v1.py --help

@@ -33,6 +33,7 @@ class MaterializedSample:
     target_image_path: Path | None
     sample_dir: Path
     extras: dict[str, Any] = field(default_factory=dict)
+    gt_mask: np.ndarray | None = None  # H×W uint8, 1=edit region (PIE-Bench)
 
 
 @dataclass

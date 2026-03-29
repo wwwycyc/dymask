@@ -33,6 +33,7 @@ class RuntimeConfig:
 @dataclass
 class SamplingConfig:
     parquet_path: Path = Path("assets/data/train-00000-of-00262-57cebf95b4a9170c.parquet")
+    piebench_path: Path | None = None
     output_root: Path = Path("runs/dymask_v1")
     sample_count: int = 8
     sample_seed: int = 42

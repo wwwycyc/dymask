@@ -30,6 +30,11 @@ class MetricRunner:
         self._lpips_model = lpips.LPIPS(net=self.metric_config.lpips_net).to(self.device).eval()
         return self._lpips_model
 
+    def _lazy_lpips_spatial(self):
+        if not hasattr(self, '_lpips_spatial_model') or self._lpips_spatial_model is None:
+            self._lpips_spatial_model = lpips.LPIPS(net=self.metric_config.lpips_net, spatial=True).to(self.device).eval()
+        return self._lpips_spatial_model
+
     def _lazy_clip(self):
         if self._clip_model is not None and self._clip_processor is not None:
             return self._clip_model, self._clip_processor
@@ -129,6 +134,54 @@ class MetricRunner:
             text_embeds = outputs.text_embeds / outputs.text_embeds.norm(dim=-1, keepdim=True)
         return float((image_embeds * text_embeds).sum(dim=-1).item())
 
+    def compute_psnr_masked(self, reference: np.ndarray, prediction: np.ndarray, mask: np.ndarray) -> float:
+        """PSNR computed only on outside-mask (non-edit) region. mask: H×W uint8, 1=edit region."""
+        ref = image_to_numpy(reference).astype(np.float32)
+        pred = image_to_numpy(prediction).astype(np.float32)
+        outside = (1 - mask.astype(np.float32))  # 1 where NOT edited
+        # zero out edit region in both
+        ref_m = ref * outside[:, :, None]
+        pred_m = pred * outside[:, :, None]
+        mse = np.mean((ref_m - pred_m) ** 2)
+        if mse < 1e-10:
+            return 100.0
+        return float(10.0 * np.log10((255.0 ** 2) / mse))
+
+    def compute_lpips_masked(self, reference: np.ndarray, prediction: np.ndarray, mask: np.ndarray) -> float | None:
+        """LPIPS computed only on outside-mask region. mask: H×W uint8, 1=edit region."""
+        if not self.metric_config.enable_lpips:
+            return None
+        model = self._lazy_lpips()
+        ref_t = self._to_lpips_tensor(image_to_numpy(reference)).to(self.device)
+        pred_t = self._to_lpips_tensor(image_to_numpy(prediction)).to(self.device)
+        outside = torch.from_numpy((1 - mask.astype(np.float32))).to(self.device).unsqueeze(0).unsqueeze(0)
+        ref_t = ref_t * outside
+        pred_t = pred_t * outside
+        with torch.no_grad():
+            return float(model(ref_t, pred_t).item())
+
+    def compute_locality_ratio(self, source_image: np.ndarray, edited_image: np.ndarray, mask: np.ndarray) -> float | None:
+        """Locality ratio: Change_in / (Change_in + Change_out) using LPIPS spatial map."""
+        if not self.metric_config.enable_lpips:
+            return None
+        import torch.nn.functional as F
+        model = self._lazy_lpips_spatial()
+        src_t = self._to_lpips_tensor(image_to_numpy(source_image)).to(self.device)
+        edit_t = self._to_lpips_tensor(image_to_numpy(edited_image)).to(self.device)
+        with torch.no_grad():
+            delta = model(src_t, edit_t)  # [1, 1, H, W]
+        mask_t = torch.from_numpy(mask.astype(np.float32)).to(self.device)  # [H, W]
+        if delta.shape[-2:] != mask_t.shape:
+            mask_t_4d = mask_t.unsqueeze(0).unsqueeze(0)
+            mask_t_4d = F.interpolate(mask_t_4d, size=delta.shape[-2:], mode='nearest')
+            mask_t = mask_t_4d.squeeze(0).squeeze(0)
+        change_in = float((delta.squeeze() * mask_t).sum().item())
+        change_out = float((delta.squeeze() * (1.0 - mask_t)).sum().item())
+        denom = change_in + change_out
+        if denom < 1e-8:
+            return None
+        return float(change_in / denom)
+
     def evaluate_case(
         self,
         source_image: np.ndarray,
@@ -136,6 +189,7 @@ class MetricRunner:
         edited_image: np.ndarray,
         target_text: str,
         reference_edited: np.ndarray | None,
+        gt_mask: np.ndarray | None = None,
     ) -> dict[str, float | None]:
         metrics: dict[str, float | None] = {}
         if self.metric_config.enable_psnr:
@@ -173,6 +227,29 @@ class MetricRunner:
             except Exception as exc:
                 metrics["edit_ref_lpips"] = None
                 metrics["edit_ref_lpips_error"] = str(exc)
+
+        # Masked metrics (PIE-Bench gt_mask)
+        metrics["outside_psnr"] = None
+        metrics["outside_lpips"] = None
+        metrics["locality_ratio"] = None
+        if gt_mask is not None:
+            if self.metric_config.enable_psnr:
+                metrics["outside_psnr"] = self.compute_psnr_masked(source_image, edited_image, gt_mask)
+            if self.metric_config.enable_lpips:
+                try:
+                    metrics["outside_lpips"] = self.compute_lpips_masked(source_image, edited_image, gt_mask)
+                except Exception as exc:
+                    metrics["outside_lpips"] = None
+                    metrics["outside_lpips_error"] = str(exc)
+                try:
+                    metrics["locality_ratio"] = self.compute_locality_ratio(source_image, edited_image, gt_mask)
+                except Exception as exc:
+                    metrics["locality_ratio"] = None
+                    metrics["locality_ratio_error"] = str(exc)
+        elif self.metric_config.enable_psnr:
+            # fallback: whole-image (existing behavior already captured in edit_source_psnr/lpips)
+            metrics["outside_psnr"] = metrics.get("edit_source_psnr")
+            metrics["outside_lpips"] = metrics.get("edit_source_lpips")
         return metrics
 
     def summarize(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

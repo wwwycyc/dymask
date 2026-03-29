@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 import random
 from collections import defaultdict
 from pathlib import Path
 
+import numpy as np
 import pyarrow.parquet as pq
 
 from .schemas import EditDatasetRecord, MaterializedSample, SampleManifestEntry
-from .utils import decode_image_bytes, prepare_image, save_csv_records, save_image, save_json
+from .utils import decode_image_bytes, decode_piebench_rle, prepare_image, save_csv_records, save_image, save_json
 
 
 class MagicBrushParquetDataset:
@@ -204,3 +206,128 @@ class MagicBrushParquetDataset:
         rows = [entry.__dict__ for entry in manifest]
         save_json(json_path, {"samples": rows})
         save_csv_records(csv_path, rows)
+
+
+class PIEBenchDataset:
+    """Loader for PIE-Bench dataset (JSON mapping file + external jpg images)."""
+
+    def __init__(self, pie_bench_dir: Path) -> None:
+        self.pie_bench_dir = Path(pie_bench_dir)
+        mapping_path = self.pie_bench_dir / "mapping_file.json"
+        if not mapping_path.exists():
+            raise FileNotFoundError(f"PIE-Bench mapping_file.json not found: {mapping_path}")
+        with open(mapping_path, encoding="utf-8") as f:
+            self._data: dict[str, dict] = json.load(f)
+        self._keys: list[str] = sorted(self._data.keys())
+
+    def __len__(self) -> int:
+        return len(self._keys)
+
+    def sample_indices(self, count: int, seed: int) -> list[int]:
+        rng = random.Random(seed)
+        indices = list(range(len(self._keys)))
+        rng.shuffle(indices)
+        return indices[:count]
+
+    def load_records(self, indices: list[int]) -> list["PIEBenchRecord"]:
+        records = []
+        for idx in indices:
+            key = self._keys[idx]
+            entry = self._data[key]
+            image_full_path = self.pie_bench_dir / "annotation_images" / entry["image_path"]
+            # strip [] from editing_prompt to get clean target_prompt
+            target_prompt = entry["editing_prompt"].replace("[", "").replace("]", "")
+            blended_word = entry.get("blended_word", "").split()[0] if entry.get("blended_word") else ""
+            rle = entry.get("mask", [])
+            gt_mask = decode_piebench_rle(rle) if rle else None
+            records.append(PIEBenchRecord(
+                row_index=idx,
+                key=key,
+                image_path=image_full_path,
+                original_prompt=entry["original_prompt"],
+                target_prompt=target_prompt,
+                editing_instruction=entry.get("editing_instruction", ""),
+                editing_type_id=entry.get("editing_type_id", ""),
+                blended_word=blended_word,
+                gt_mask=gt_mask,
+            ))
+        return records
+
+    def materialize_samples(
+        self,
+        records: list["PIEBenchRecord"],
+        output_dir: Path,
+        image_size: int,
+    ) -> tuple[list[MaterializedSample], list[SampleManifestEntry]]:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        materialized: list[MaterializedSample] = []
+        manifest: list[SampleManifestEntry] = []
+        for offset, record in enumerate(records):
+            sample_id = f"sample_{offset:03d}_pie_{record.key}"
+            sample_dir = output_dir / sample_id
+            sample_dir.mkdir(parents=True, exist_ok=True)
+
+            from PIL import Image as PILImage
+            pil_img = PILImage.open(record.image_path).convert("RGB")
+            source_arr = prepare_image(pil_img, image_size)
+            source_path = sample_dir / "source.png"
+            save_image(source_path, source_arr)
+
+            meta = {
+                "sample_id": sample_id,
+                "row_index": record.row_index,
+                "key": record.key,
+                "source_prompt": record.original_prompt,
+                "edit_prompt": record.editing_instruction,
+                "target_prompt": record.target_prompt,
+                "editing_type_id": record.editing_type_id,
+                "blended_word": record.blended_word,
+                "source_image_path": str(source_path),
+                "target_reference_path": None,
+            }
+            save_json(sample_dir / "sample.json", meta)
+
+            materialized_sample = MaterializedSample(
+                sample_id=sample_id,
+                row_index=record.row_index,
+                source_prompt=record.original_prompt,
+                edit_prompt=record.editing_instruction,
+                target_prompt=record.target_prompt,
+                source_image_path=source_path,
+                target_image_path=None,
+                sample_dir=sample_dir,
+                extras={
+                    "dataset_format": "piebench",
+                    "blended_words": record.blended_word,
+                    "editing_type_id": record.editing_type_id,
+                },
+                gt_mask=record.gt_mask,
+            )
+            manifest_entry = SampleManifestEntry(
+                sample_id=sample_id,
+                row_index=record.row_index,
+                source_prompt=record.original_prompt,
+                edit_prompt=record.editing_instruction,
+                target_prompt=record.target_prompt,
+                source_image_path=str(source_path),
+                target_image_path=None,
+                record_id=record.key,
+            )
+            materialized.append(materialized_sample)
+            manifest.append(manifest_entry)
+        return materialized, manifest
+
+
+from dataclasses import dataclass, field as dc_field
+
+@dataclass
+class PIEBenchRecord:
+    row_index: int
+    key: str
+    image_path: Path
+    original_prompt: str
+    target_prompt: str
+    editing_instruction: str
+    editing_type_id: str
+    blended_word: str
+    gt_mask: np.ndarray | None = None

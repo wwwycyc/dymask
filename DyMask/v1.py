@@ -69,10 +69,10 @@ class DDIMInversionBackend:
         configure_ntip2p_module(self.ntip2p, pipe, runtime)
 
     @torch.no_grad()
-    def invert(self, source_image: np.ndarray, prompt: str) -> InversionOutput:
+    def invert(self, source_image: np.ndarray) -> InversionOutput:
         self.ntip2p.ptp_utils.register_attention_control(self.pipe, None)
         inversion = self.ntip2p.NullInversion(self.pipe)
-        inversion.init_prompt(strip_prompt_markup(prompt))
+        inversion.init_prompt("")
         reconstruction_image, ddim_latents = inversion.ddim_inversion(source_image)
         src_latents = [latent.detach().clone() for latent in reversed(ddim_latents[1:])]
         inversion_timesteps = [
@@ -193,6 +193,12 @@ class DynamicMaskBuilder:
             raw_mask = (
                 self.mask_config.discrepancy_weight * discrepancy
                 + self.mask_config.attention_weight * attention_map
+            )
+        elif self.variant == "discrepancy_latent":
+            weight_sum = self.mask_config.discrepancy_weight + self.mask_config.latent_weight
+            raw_mask = (
+                self.mask_config.discrepancy_weight / weight_sum * discrepancy
+                + self.mask_config.latent_weight / weight_sum * latent_drift
             )
         else:
             raw_mask = (
@@ -666,7 +672,7 @@ class V1Editor:
         self._set_timesteps()
 
         source_image = self._load_sample_image(sample.source_image_path)
-        inversion = self.inversion_backend.invert(source_image, sample.source_prompt)
+        inversion = self.inversion_backend.invert(source_image)
         self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
         target_condition = self.prompt_encoder.encode(sample.target_prompt)
         focus_terms = self._extract_focus_terms(sample)
@@ -725,7 +731,7 @@ class V1Editor:
 
     def run_sample(self, sample: MaterializedSample) -> tuple[InversionOutput, list[MethodResult]]:
         source_image = self._load_sample_image(sample.source_image_path)
-        inversion = self.inversion_backend.invert(source_image, sample.source_prompt)
+        inversion = self.inversion_backend.invert(source_image)
         self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
         save_image(sample.sample_dir / "source_reconstruction.png", inversion.reconstruction_image)
         save_json(sample.sample_dir / "inversion.json", inversion.metadata)

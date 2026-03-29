@@ -10,6 +10,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 
+def decode_piebench_rle(rle: list[int], height: int = 512, width: int = 512) -> np.ndarray:
+    """Decode PIE-Bench RLE mask [start0, len0, start1, len1, ...] to H×W uint8 array."""
+    mask = np.zeros(height * width, dtype=np.uint8)
+    for i in range(0, len(rle) - 1, 2):
+        start, length = rle[i], rle[i + 1]
+        mask[start:start + length] = 1
+    return mask.reshape(height, width)
+
+
 def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 

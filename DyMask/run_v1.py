@@ -14,7 +14,7 @@ if __package__ is None or __package__ == "":
 
 from DyMask.adapters import build_stable_diffusion_pipeline
 from DyMask.config import ExperimentConfig
-from DyMask.data import MagicBrushParquetDataset
+from DyMask.data import MagicBrushParquetDataset, PIEBenchDataset
 from DyMask.logging_utils import MarkdownExperimentLogger
 from DyMask.metrics import MetricRunner
 from DyMask.schemas import MaterializedSample, SampleManifestEntry
@@ -36,6 +36,7 @@ OVERVIEW_METHODS = (
     "global_blend",
     "discrepancy_only",
     "discrepancy_attention",
+    "discrepancy_latent",
     "full_dynamic_mask",
 )
 
@@ -44,6 +45,7 @@ METHOD_DISPLAY_NAMES = {
     "global_blend": "global blend",
     "discrepancy_only": "D_t",
     "discrepancy_attention": "D_t + A_t",
+    "discrepancy_latent": "D_t + C_t",
     "full_dynamic_mask": "Full",
 }
 
@@ -51,6 +53,7 @@ METHOD_DISPLAY_NAMES = {
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run DyMask phased V1 experiments.")
     parser.add_argument("--parquet-path", default="assets/data/train-00000-of-00262-57cebf95b4a9170c.parquet")
+    parser.add_argument("--piebench-path", default=None, help="Path to PIE-Bench directory (overrides --parquet-path if set).")
     parser.add_argument("--sample-json", default=None, help="Rerun a single existing sample.json with its current prompts.")
     parser.add_argument("--output-root", default="runs/dymask_v1")
     parser.add_argument("--sample-count", type=int, default=8)
@@ -116,6 +119,7 @@ def build_config(args: argparse.Namespace) -> ExperimentConfig:
     legacy_steps = args.num_ddim_steps
     config.phase = args.phase
     config.sampling.parquet_path = Path(args.parquet_path)
+    config.sampling.piebench_path = Path(args.piebench_path) if args.piebench_path else None
     config.sampling.output_root = Path(args.output_root)
     config.sampling.sample_count = args.sample_count
     config.sampling.sample_seed = args.sample_seed
@@ -343,16 +347,28 @@ def main() -> None:
             next_step="进入对应 phase 的单样本验证。",
         )
     else:
-        dataset = MagicBrushParquetDataset(config.sampling.parquet_path)
-        schema_info = dataset.inspect_schema()
-        logger.log(
-            stage="数据准备",
-            operation="探测 parquet schema",
-            inputs={"parquet_path": str(config.sampling.parquet_path)},
-            result=schema_info,
-            conclusion="已确认数据集字段结构，可用于 source/target 成对抽样。",
-            next_step="抽样并固化 sample manifest。",
-        )
+        if config.sampling.piebench_path is not None:
+            dataset = PIEBenchDataset(config.sampling.piebench_path)
+            schema_info = {"dataset": "PIE-Bench", "path": str(config.sampling.piebench_path)}
+            logger.log(
+                stage="数据准备",
+                operation="加载 PIE-Bench 数据集",
+                inputs={"piebench_path": str(config.sampling.piebench_path)},
+                result=schema_info,
+                conclusion="已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。",
+                next_step="抽样并固化 sample manifest。",
+            )
+        else:
+            dataset = MagicBrushParquetDataset(config.sampling.parquet_path)
+            schema_info = dataset.inspect_schema()
+            logger.log(
+                stage="数据准备",
+                operation="探测 parquet schema",
+                inputs={"parquet_path": str(config.sampling.parquet_path)},
+                result=schema_info,
+                conclusion="已确认数据集字段结构，可用于 source/target 成对抽样。",
+                next_step="抽样并固化 sample manifest。",
+            )
 
         sampled_indices = dataset.sample_indices(config.sampling.sample_count, config.sampling.sample_seed)
         if args.row_indices:
@@ -456,6 +472,7 @@ def main() -> None:
                     edited_image=method_result.edited_image,
                     target_text=sample.target_prompt,
                     reference_edited=target_reference,
+                    gt_mask=sample.gt_mask,
                 )
             method_result.metrics = metrics
             row = {
