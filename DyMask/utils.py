@@ -16,7 +16,13 @@ def decode_piebench_rle(rle: list[int], height: int = 512, width: int = 512) -> 
     for i in range(0, len(rle) - 1, 2):
         start, length = rle[i], rle[i + 1]
         mask[start:start + length] = 1
-    return mask.reshape(height, width)
+    mask = mask.reshape(height, width)
+    # align with PnPI: force boundary to 1 to avoid annotation errors
+    mask[0, :] = 1
+    mask[-1, :] = 1
+    mask[:, 0] = 1
+    mask[:, -1] = 1
+    return mask
 
 
 def ensure_parent(path: Path) -> None:

@@ -8,7 +8,7 @@ from typing import Any
 @dataclass
 class RuntimeConfig:
     model_id: str = "runwayml/stable-diffusion-v1-5"
-    clip_model_id: str = "openai/clip-vit-base-patch32"
+    clip_model_id: str = "openai/clip-vit-large-patch14"
     device: str = "cuda"
     dtype: str = "float16"
     image_size: int = 512
@@ -63,7 +63,7 @@ class MetricConfig:
     enable_psnr: bool = True
     enable_lpips: bool = True
     enable_clipscore: bool = True
-    lpips_net: str = "alex"
+    lpips_net: str = "squeeze"
     clip_local_files_only: bool = True
     strict: bool = False
 

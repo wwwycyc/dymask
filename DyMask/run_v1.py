@@ -61,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--row-indices", nargs="+", type=int, default=None, help="Use explicit parquet row indices instead of random sampling.")
     parser.add_argument("--run-limit", type=int, default=1)
     parser.add_argument("--model-id", default="runwayml/stable-diffusion-v1-5")
-    parser.add_argument("--clip-model-id", default="openai/clip-vit-base-patch32")
+    parser.add_argument("--clip-model-id", default="openai/clip-vit-large-patch14")
     parser.add_argument("--image-size", type=int, default=512)
     parser.add_argument("--num-ddim-steps", type=int, default=10, help="Legacy alias: sets both inversion and edit steps unless overridden.")
     parser.add_argument("--num-inversion-steps", type=int, default=None)
