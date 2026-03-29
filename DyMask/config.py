@@ -56,6 +56,17 @@ class MaskConfig:
     smoothing_kernel: int = 5
     attention_locations: tuple[str, ...] = ("down", "mid", "up")
     selected_step_count: int = 5
+    # C_t preservation prior
+    preservation_k: float = 3.0
+    # temporal smoothing
+    use_temporal_smoothing: bool = True
+    temporal_rho: float = 0.5
+    # temporal schedule for attention (beta) and preservation (gamma) weights
+    use_temporal_schedule: bool = True
+    beta_start: float = 0.4
+    beta_end: float = 1.0
+    gamma_start: float = 1.0
+    gamma_end: float = 0.5
 
 
 @dataclass

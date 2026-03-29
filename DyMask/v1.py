@@ -149,13 +149,23 @@ def aggregate_step_cross_attention(attention_store, token_mask: torch.Tensor, ta
 
 
 class DynamicMaskBuilder:
-    def __init__(self, mask_config: MaskConfig, variant: str) -> None:
+    def __init__(self, mask_config: MaskConfig, variant: str, total_steps: int = 20) -> None:
         self.mask_config = mask_config
         self.variant = variant
+        self.total_steps = max(total_steps, 1)
         self._static_mask: torch.Tensor | None = None
+        self._prev_mask: torch.Tensor | None = None
+        self._step_idx: int = 0
 
     def reset(self) -> None:
         self._static_mask = None
+        self._prev_mask = None
+        self._step_idx = 0
+
+    def _schedule(self, start: float, end: float) -> float:
+        """Linear schedule from start to end over total_steps."""
+        t = self._step_idx / max(self.total_steps - 1, 1)
+        return start + (end - start) * t
 
     def build(
         self,
@@ -174,6 +184,7 @@ class DynamicMaskBuilder:
                 except ValueError:
                     blend_alpha = self.mask_config.global_blend_alpha
             mask = torch.full_like(noise_uncond[:, :1], blend_alpha)
+            self._step_idx += 1
             return mask, {"mask": mask}
 
         # D_t = |noise_cond - noise_uncond|: decoupled from guidance_scale
@@ -185,47 +196,56 @@ class DynamicMaskBuilder:
         attention_map = attention_map.to(device=noise_uncond.device, dtype=noise_uncond.dtype)
         attention_map = _normalize_tensor_map(attention_map)
 
+        # C_t: preservation prior — exp(-k * drift), high where unchanged
         latent_drift = torch.abs(latents - source_latent).mean(dim=1, keepdim=True)
         latent_drift = _normalize_tensor_map(latent_drift)
+        preservation = torch.exp(-self.mask_config.preservation_k * latent_drift)
+
+        # temporal schedule
+        cfg = self.mask_config
+        if cfg.use_temporal_schedule:
+            beta = self._schedule(cfg.beta_start, cfg.beta_end)      # attention weight
+            gamma = self._schedule(cfg.gamma_start, cfg.gamma_end)   # preservation weight
+        else:
+            beta = cfg.attention_weight
+            gamma = cfg.latent_weight
 
         if self.variant == "discrepancy_only":
             raw_mask = discrepancy
         elif self.variant == "discrepancy_attention":
-            raw_mask = (
-                self.mask_config.discrepancy_weight * discrepancy
-                + self.mask_config.attention_weight * attention_map
-            )
+            raw_mask = cfg.discrepancy_weight * discrepancy + beta * attention_map
         elif self.variant == "discrepancy_latent":
-            weight_sum = self.mask_config.discrepancy_weight + self.mask_config.latent_weight
-            raw_mask = (
-                self.mask_config.discrepancy_weight / weight_sum * discrepancy
-                + self.mask_config.latent_weight / weight_sum * latent_drift
-            )
-        else:
-            raw_mask = (
-                self.mask_config.discrepancy_weight * discrepancy
-                + self.mask_config.attention_weight * attention_map
-                + self.mask_config.latent_weight * latent_drift
-            )
+            # preservation acts as suppressor: subtract gamma * preservation
+            raw_mask = cfg.discrepancy_weight * discrepancy - gamma * preservation
+        else:  # full_dynamic_mask
+            raw_mask = cfg.discrepancy_weight * discrepancy + beta * attention_map - gamma * preservation
 
-        if self.mask_config.smoothing_kernel > 1:
-            kernel = self.mask_config.smoothing_kernel
+        if cfg.smoothing_kernel > 1:
+            kernel = cfg.smoothing_kernel
             padding = kernel // 2
             raw_mask = F.avg_pool2d(raw_mask, kernel_size=kernel, stride=1, padding=padding)
 
-        mask = torch.sigmoid((raw_mask - self.mask_config.threshold) * self.mask_config.temperature)
-        mask = torch.clamp(mask, min=self.mask_config.min_value, max=self.mask_config.max_value)
+        mask = torch.sigmoid((raw_mask - cfg.threshold) * cfg.temperature)
+        mask = torch.clamp(mask, min=cfg.min_value, max=cfg.max_value)
         mask = mask.to(device=noise_uncond.device, dtype=noise_uncond.dtype)
 
-        if self.mask_config.mode == "static":
+        # temporal smoothing
+        if cfg.use_temporal_smoothing and self._prev_mask is not None:
+            mask = cfg.temporal_rho * self._prev_mask + (1.0 - cfg.temporal_rho) * mask
+        self._prev_mask = mask.detach().clone()
+
+        if cfg.mode == "static":
             if self._static_mask is None:
                 self._static_mask = mask.detach().clone()
             mask = self._static_mask
+
+        self._step_idx += 1
 
         aux = {
             "discrepancy": discrepancy,
             "attention": attention_map,
             "latent_drift": latent_drift,
+            "preservation": preservation,
             "mask": mask,
         }
         return mask, aux
@@ -375,7 +395,7 @@ class V1Editor:
         if not aux_history:
             return None
         images = []
-        for key in ("discrepancy", "attention", "latent_drift"):
+        for key in ("discrepancy", "attention", "latent_drift", "preservation"):
             if any(key not in step for step in aux_history):
                 continue
             summary = summarize_step_maps([step[key] for step in aux_history])
@@ -599,7 +619,7 @@ class V1Editor:
             for latent in inversion.src_latents
         ]
         source_latents = self._resample_source_latents(source_latents, len(self.pipe.scheduler.timesteps))
-        builder = DynamicMaskBuilder(self.config.mask, method_name)
+        builder = DynamicMaskBuilder(self.config.mask, method_name, total_steps=len(self.pipe.scheduler.timesteps))
         builder.reset()
         focus_terms = self._extract_focus_terms(sample)
         focus_mask = self._build_focus_token_mask(target_condition, focus_terms)
