@@ -109,14 +109,14 @@ class TargetPromptPredictor:
         self.uncond_condition = prompt_encoder.encode("")
 
     @torch.no_grad()
-    def predict(self, latents: torch.Tensor, timestep: torch.Tensor, target_condition: TextCondition) -> tuple[torch.Tensor, dict[str, float]]:
+    def predict(self, latents: torch.Tensor, timestep: torch.Tensor, target_condition: TextCondition) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[str, float]]:
         latents_input = torch.cat([latents, latents], dim=0)
         context = torch.cat([self.uncond_condition.embeddings, target_condition.embeddings], dim=0)
         noise = self.pipe.unet(latents_input, timestep, encoder_hidden_states=context).sample
         noise_uncond, noise_cond = noise.chunk(2, dim=0)
         delta = (noise_cond - noise_uncond).abs().mean().item()
         guided_noise = noise_uncond + self.guidance_scale * (noise_cond - noise_uncond)
-        return guided_noise, {"delta": float(delta)}
+        return guided_noise, noise_uncond, noise_cond, {"delta": float(delta)}
 
 
 def aggregate_step_cross_attention(attention_store, token_mask: torch.Tensor, target_hw: tuple[int, int], locations: tuple[str, ...]) -> torch.Tensor:
@@ -159,8 +159,8 @@ class DynamicMaskBuilder:
 
     def build(
         self,
-        eps_src: torch.Tensor,
-        eps_tar: torch.Tensor,
+        noise_cond: torch.Tensor,
+        noise_uncond: torch.Tensor,
         latents: torch.Tensor,
         source_latent: torch.Tensor,
         attention_map: torch.Tensor,
@@ -173,15 +173,16 @@ class DynamicMaskBuilder:
                     blend_alpha = float(suffix)
                 except ValueError:
                     blend_alpha = self.mask_config.global_blend_alpha
-            mask = torch.full_like(eps_src[:, :1], blend_alpha)
+            mask = torch.full_like(noise_uncond[:, :1], blend_alpha)
             return mask, {"mask": mask}
 
-        discrepancy = torch.abs(eps_tar - eps_src).mean(dim=1, keepdim=True)
+        # D_t = |noise_cond - noise_uncond|: decoupled from guidance_scale
+        discrepancy = torch.abs(noise_cond - noise_uncond).mean(dim=1, keepdim=True)
         discrepancy = _normalize_tensor_map(discrepancy)
 
         if attention_map.ndim == 3:
             attention_map = attention_map.unsqueeze(0)
-        attention_map = attention_map.to(device=eps_src.device, dtype=eps_src.dtype)
+        attention_map = attention_map.to(device=noise_uncond.device, dtype=noise_uncond.dtype)
         attention_map = _normalize_tensor_map(attention_map)
 
         latent_drift = torch.abs(latents - source_latent).mean(dim=1, keepdim=True)
@@ -214,7 +215,7 @@ class DynamicMaskBuilder:
 
         mask = torch.sigmoid((raw_mask - self.mask_config.threshold) * self.mask_config.temperature)
         mask = torch.clamp(mask, min=self.mask_config.min_value, max=self.mask_config.max_value)
-        mask = mask.to(device=eps_src.device, dtype=eps_src.dtype)
+        mask = mask.to(device=noise_uncond.device, dtype=noise_uncond.dtype)
 
         if self.mask_config.mode == "static":
             if self._static_mask is None:
@@ -245,12 +246,31 @@ class V1Editor:
 
     def _extract_focus_terms(self, sample: MaterializedSample) -> list[str]:
         terms: list[str] = []
-        bracket_terms = re.findall(r"\[([^\]]+)\]", sample.target_prompt)
-        terms.extend(term.strip() for term in bracket_terms if term.strip())
 
+        # Priority 1: bracketed terms from raw editing_prompt (PIE-Bench format: "a [cat] on a sofa")
         extras = sample.extras or {}
+        editing_prompt_raw = extras.get("editing_prompt_raw", "")
+        if editing_prompt_raw:
+            bracket_terms = re.findall(r"\[([^\]]+)\]", editing_prompt_raw)
+            terms.extend(term.strip() for term in bracket_terms if term.strip())
+
+        # Also add blended_word (the edited object, e.g. "curtain") alongside the bracket term (e.g. "yellow")
+        blended_word_raw = extras.get("blended_words", "") or ""
+        # PIE-Bench blended_word is a single word string (not JSON), add it directly
+        if isinstance(blended_word_raw, str) and blended_word_raw.strip() and not blended_word_raw.startswith("["):
+            for bw in blended_word_raw.split():
+                bw = bw.strip()
+                if bw and bw not in terms:
+                    terms.append(bw)
+
+        # Priority 2: bracketed terms directly in target_prompt (fallback for other datasets)
+        if not terms:
+            bracket_terms = re.findall(r"\[([^\]]+)\]", sample.target_prompt)
+            terms.extend(term.strip() for term in bracket_terms if term.strip())
+
+        # Priority 3: blended_words from extras
         blended_words = extras.get("blended_words")
-        if blended_words:
+        if not terms and blended_words:
             try:
                 entries = json.loads(blended_words)
                 for entry in entries:
@@ -262,6 +282,7 @@ class V1Editor:
             except Exception:
                 pass
 
+        # Priority 4: edit_prompt JSON keys
         if not terms:
             try:
                 edit_payload = json.loads(sample.edit_prompt)
@@ -272,6 +293,7 @@ class V1Editor:
             except Exception:
                 pass
 
+        # Priority 5: diff between source and target words
         if not terms:
             source_words = set(strip_prompt_markup(sample.source_prompt).split())
             target_words = strip_prompt_markup(sample.target_prompt).split()
@@ -349,14 +371,31 @@ class V1Editor:
         return np.asarray(Image.open(path).convert("RGB")).copy()
 
     @staticmethod
-    def _save_aux_outputs(aux_history: list[dict[str, np.ndarray]], method_dir: Path) -> Path | None:
+    def _save_aux_outputs(aux_history: list[dict[str, np.ndarray]], method_dir: Path, gt_mask: np.ndarray | None = None) -> Path | None:
         if not aux_history:
             return None
         images = []
-        for key in ("discrepancy", "attention", "latent_drift", "mask"):
+        for key in ("discrepancy", "attention", "latent_drift"):
             if any(key not in step for step in aux_history):
                 continue
             summary = summarize_step_maps([step[key] for step in aux_history])
+            if summary is not None:
+                images.append(summary)
+        # Insert GT mask row (static, repeated 3 times to match strip width)
+        if gt_mask is not None and images:
+            from PIL import Image as PILImage
+            from .utils import mask_to_rgb, make_labeled_strip
+            # Infer tile size from existing strip (strip width = tile_w * 3)
+            strip_h, strip_w = images[0].shape[:2]
+            tile_w = strip_w // 3
+            tile_h = strip_h - 28  # subtract label_height
+            gt_resized = np.array(PILImage.fromarray(gt_mask).resize((tile_w, tile_h), PILImage.NEAREST))
+            gt_rgb = mask_to_rgb(gt_resized)
+            gt_strip = make_labeled_strip([gt_rgb, gt_rgb, gt_rgb], ["gt_mask", "", ""])
+            images.append(gt_strip)
+        # Predicted mask
+        if not any("mask" not in step for step in aux_history):
+            summary = summarize_step_maps([step["mask"] for step in aux_history])
             if summary is not None:
                 images.append(summary)
         if not images:
@@ -574,9 +613,7 @@ class V1Editor:
         for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
             source_latent = source_latents[step_idx]
             self.attention_store.reset()
-            eps_src = self.source_predictor.predict(latents, timestep)
-            self.attention_store.reset()
-            eps_tar, target_stats = self.target_predictor.predict(latents, timestep, target_condition)
+            eps_tar, noise_uncond, noise_cond, target_stats = self.target_predictor.predict(latents, timestep, target_condition)
             timestep_value = int(timestep.item()) if hasattr(timestep, "item") else int(timestep)
             delta = float(target_stats["delta"])
             print(f"[{sample.sample_id}][{method_name}] {step_idx} {timestep_value} {delta:.6f}")
@@ -587,16 +624,20 @@ class V1Editor:
                 locations=self.config.mask.attention_locations,
             )
 
+            # eps_ref is noise_uncond (unguided baseline, replaces separate source forward)
+            eps_ref = noise_uncond
+
             if method_name == "target_only":
-                mask = torch.ones_like(eps_src[:, :1])
+                mask = torch.ones_like(eps_ref[:, :1])
                 aux_tensor = {"mask": mask}
                 eps = eps_tar
             else:
-                mask, aux_tensor = builder.build(eps_src, eps_tar, latents, source_latent, attention_map)
-                eps = eps_src + mask * (eps_tar - eps_src)
+                # D_t = |noise_cond - noise_uncond|: decoupled from guidance_scale
+                mask, aux_tensor = builder.build(noise_cond, noise_uncond, latents, source_latent, attention_map)
+                eps = eps_ref + mask * (eps_tar - eps_ref)
 
-            src_tar_gap = float(torch.abs(eps_tar - eps_src).mean().item())
-            applied_gap = float(torch.abs(eps - eps_src).mean().item())
+            src_tar_gap = float(torch.abs(eps_tar - eps_ref).mean().item())
+            applied_gap = float(torch.abs(eps - eps_ref).mean().item())
             blend_strength = applied_gap / src_tar_gap if src_tar_gap > 1e-8 else 0.0
             trace_rows.append(
                 {
@@ -631,7 +672,7 @@ class V1Editor:
             mask_summary_path = method_dir / "mask_summary.png"
             save_image(mask_summary_path, mask_summary)
 
-        aux_summary_path = self._save_aux_outputs(aux_history, method_dir)
+        aux_summary_path = self._save_aux_outputs(aux_history, method_dir, gt_mask=sample.gt_mask)
         self._save_selected_step_outputs(aux_history, method_dir)
         delta_trace_path = self._write_delta_trace(method_dir, trace_rows)
         diagnostics_csv_path, diagnostics_json_path, diagnostics_summary = self._write_step_diagnostics(

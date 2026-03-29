@@ -223,9 +223,13 @@ class PIEBenchDataset:
     def __len__(self) -> int:
         return len(self._keys)
 
-    def sample_indices(self, count: int, seed: int) -> list[int]:
+    def sample_indices(self, count: int, seed: int, type_id: str | None = None, image_path_prefix: str | None = None) -> list[int]:
         rng = random.Random(seed)
         indices = list(range(len(self._keys)))
+        if type_id is not None:
+            indices = [i for i in indices if self._data[self._keys[i]].get("editing_type_id") == str(type_id)]
+        if image_path_prefix is not None:
+            indices = [i for i in indices if self._data[self._keys[i]].get("image_path", "").startswith(image_path_prefix)]
         rng.shuffle(indices)
         return indices[:count]
 
@@ -235,8 +239,9 @@ class PIEBenchDataset:
             key = self._keys[idx]
             entry = self._data[key]
             image_full_path = self.pie_bench_dir / "annotation_images" / entry["image_path"]
-            # strip [] from editing_prompt to get clean target_prompt
-            target_prompt = entry["editing_prompt"].replace("[", "").replace("]", "")
+            # Keep original bracketed form for focus term extraction; also provide clean version
+            editing_prompt_raw = entry["editing_prompt"]
+            target_prompt = editing_prompt_raw.replace("[", "").replace("]", "")
             blended_word = entry.get("blended_word", "").split()[0] if entry.get("blended_word") else ""
             rle = entry.get("mask", [])
             gt_mask = decode_piebench_rle(rle) if rle else None
@@ -249,6 +254,7 @@ class PIEBenchDataset:
                 editing_instruction=entry.get("editing_instruction", ""),
                 editing_type_id=entry.get("editing_type_id", ""),
                 blended_word=blended_word,
+                editing_prompt_raw=editing_prompt_raw,
                 gt_mask=gt_mask,
             ))
         return records
@@ -300,6 +306,7 @@ class PIEBenchDataset:
                     "dataset_format": "piebench",
                     "blended_words": record.blended_word,
                     "editing_type_id": record.editing_type_id,
+                    "editing_prompt_raw": record.editing_prompt_raw,
                 },
                 gt_mask=record.gt_mask,
             )
@@ -330,4 +337,5 @@ class PIEBenchRecord:
     editing_instruction: str
     editing_type_id: str
     blended_word: str
+    editing_prompt_raw: str = ""  # original form with [] brackets preserved
     gt_mask: np.ndarray | None = None

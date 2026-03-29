@@ -54,6 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run DyMask phased V1 experiments.")
     parser.add_argument("--parquet-path", default="assets/data/train-00000-of-00262-57cebf95b4a9170c.parquet")
     parser.add_argument("--piebench-path", default=None, help="Path to PIE-Bench directory (overrides --parquet-path if set).")
+    parser.add_argument("--piebench-type-id", default=None, help="Filter PIE-Bench by editing_type_id (0-9). If not set, sample randomly.")
+    parser.add_argument("--piebench-image-prefix", default=None, help="Filter PIE-Bench by image_path prefix (e.g. '6_change_attribute_color_40/').")
     parser.add_argument("--sample-json", default=None, help="Rerun a single existing sample.json with its current prompts.")
     parser.add_argument("--output-root", default="runs/dymask_v1")
     parser.add_argument("--sample-count", type=int, default=8)
@@ -370,7 +372,12 @@ def main() -> None:
                 next_step="抽样并固化 sample manifest。",
             )
 
-        sampled_indices = dataset.sample_indices(config.sampling.sample_count, config.sampling.sample_seed)
+        piebench_type_id = getattr(args, 'piebench_type_id', None)
+        piebench_image_prefix = getattr(args, 'piebench_image_prefix', None)
+        if isinstance(dataset, PIEBenchDataset):
+            sampled_indices = dataset.sample_indices(config.sampling.sample_count, config.sampling.sample_seed, type_id=piebench_type_id, image_path_prefix=piebench_image_prefix)
+        else:
+            sampled_indices = dataset.sample_indices(config.sampling.sample_count, config.sampling.sample_seed)
         if args.row_indices:
             sampled_indices = [int(index) for index in args.row_indices]
         sampled_records = dataset.load_records(sampled_indices)
