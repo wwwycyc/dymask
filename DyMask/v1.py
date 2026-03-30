@@ -22,6 +22,22 @@ def _normalize_tensor_map(tensor: torch.Tensor, eps: float = 1e-6) -> torch.Tens
     return (tensor - min_value) / (max_value - min_value).clamp(min=eps)
 
 
+def _select_step_indices(total_steps: int, step_count: int, step_stride: int | None = None) -> list[int]:
+    if total_steps <= 0:
+        return []
+    if step_stride is not None and int(step_stride) > 0:
+        indices = list(range(0, total_steps, int(step_stride)))
+        return indices if indices else [0]
+
+    step_count = max(1, min(int(step_count), total_steps))
+    raw_indices = np.linspace(0, total_steps - 1, num=step_count, dtype=int).tolist()
+    deduped: list[int] = []
+    for index in raw_indices:
+        if index not in deduped:
+            deduped.append(index)
+    return deduped
+
+
 class PromptEncoder:
     def __init__(self, pipe) -> None:
         self.pipe = pipe
@@ -178,25 +194,14 @@ class DynamicMaskBuilder:
     def reset(self) -> None:
         self._static_mask = None
 
-    def build(
+    def _compute_aux_maps(
         self,
         reference_noise: torch.Tensor,
         target_noise: torch.Tensor,
         latents: torch.Tensor,
         source_latent: torch.Tensor,
         attention_map: torch.Tensor,
-    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        if self.variant.startswith("global_blend"):
-            blend_alpha = self.mask_config.global_blend_alpha
-            if "_" in self.variant:
-                suffix = self.variant.rsplit("_", 1)[-1]
-                try:
-                    blend_alpha = float(suffix)
-                except ValueError:
-                    blend_alpha = self.mask_config.global_blend_alpha
-            mask = torch.full_like(reference_noise[:, :1], blend_alpha)
-            return mask, {"mask": mask}
-
+    ) -> dict[str, torch.Tensor]:
         # D_t compares the same prediction scale on both branches to avoid CFG amplification artifacts.
         discrepancy = torch.abs(target_noise - reference_noise).mean(dim=1, keepdim=True)
         discrepancy = _normalize_tensor_map(discrepancy)
@@ -208,6 +213,37 @@ class DynamicMaskBuilder:
 
         latent_drift = torch.abs(latents - source_latent).mean(dim=1, keepdim=True)
         latent_drift = _normalize_tensor_map(latent_drift)
+
+        return {
+            "discrepancy": discrepancy,
+            "attention": attention_map,
+            "latent_drift": latent_drift,
+        }
+
+    def build(
+        self,
+        reference_noise: torch.Tensor,
+        target_noise: torch.Tensor,
+        latents: torch.Tensor,
+        source_latent: torch.Tensor,
+        attention_map: torch.Tensor,
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        aux = self._compute_aux_maps(reference_noise, target_noise, latents, source_latent, attention_map)
+        discrepancy = aux["discrepancy"]
+        attention_map = aux["attention"]
+        latent_drift = aux["latent_drift"]
+
+        if self.variant.startswith("global_blend"):
+            blend_alpha = self.mask_config.global_blend_alpha
+            if "_" in self.variant:
+                suffix = self.variant.rsplit("_", 1)[-1]
+                try:
+                    blend_alpha = float(suffix)
+                except ValueError:
+                    blend_alpha = self.mask_config.global_blend_alpha
+            mask = torch.full_like(reference_noise[:, :1], blend_alpha)
+            aux["mask"] = mask
+            return mask, aux
 
         if self.variant == "discrepancy_only":
             raw_mask = discrepancy
@@ -222,10 +258,11 @@ class DynamicMaskBuilder:
                 - self.mask_config.latent_weight * latent_drift
             )
         else:
+            latent_penalty = (1.0 - attention_map) * latent_drift
             raw_mask = (
                 self.mask_config.discrepancy_weight * discrepancy
                 + self.mask_config.attention_weight * attention_map
-                - self.mask_config.latent_weight * latent_drift
+                - self.mask_config.latent_weight * latent_penalty
             )
 
         if self.mask_config.smoothing_kernel > 1:
@@ -242,12 +279,7 @@ class DynamicMaskBuilder:
                 self._static_mask = mask.detach().clone()
             mask = self._static_mask
 
-        aux = {
-            "discrepancy": discrepancy,
-            "attention": attention_map,
-            "latent_drift": latent_drift,
-            "mask": mask,
-        }
+        aux["mask"] = mask
         return mask, aux
 
 
@@ -441,18 +473,20 @@ class V1Editor:
     def _load_sample_image(path: Path) -> np.ndarray:
         return np.asarray(Image.open(path).convert("RGB")).copy()
 
-    @staticmethod
     def _save_aux_outputs(
+        self,
         aux_history: list[dict[str, np.ndarray]],
         method_dir: Path,
         gt_mask: np.ndarray | None = None,
     ) -> Path | None:
         if not aux_history:
             return None
-        aux_labels = tuple(
-            f"{index:02d}"
-            for index in np.linspace(0, len(aux_history) - 1, num=5, dtype=int).tolist()
+        selected_indices = _select_step_indices(
+            len(aux_history),
+            self.config.mask.selected_step_count,
+            self.config.mask.selected_step_stride,
         )
+        aux_labels = tuple(f"step_{index:02d}" for index in selected_indices)
         map_shape: tuple[int, int] | None = None
         for step_payload in aux_history:
             for key in ("discrepancy", "attention", "latent_drift", "mask"):
@@ -471,7 +505,7 @@ class V1Editor:
             if any(key not in step for step in aux_history):
                 continue
             summary = summarize_step_maps(
-                [step[key] for step in aux_history],
+                [aux_history[index][key] for index in selected_indices],
                 labels=tuple(f"{label} {step_label}" for step_label in aux_labels),
             )
             if summary is not None:
@@ -507,10 +541,13 @@ class V1Editor:
     def _save_selected_step_outputs(self, aux_history: list[dict[str, np.ndarray]], method_dir: Path) -> Path | None:
         if not aux_history:
             return None
-        step_count = min(self.config.mask.selected_step_count, len(aux_history))
-        if step_count <= 0:
+        indices = _select_step_indices(
+            len(aux_history),
+            self.config.mask.selected_step_count,
+            self.config.mask.selected_step_stride,
+        )
+        if not indices:
             return None
-        indices = np.linspace(0, len(aux_history) - 1, num=step_count, dtype=int).tolist()
         selected_dir = method_dir / "selected_steps"
         selected_dir.mkdir(parents=True, exist_ok=True)
         mapping: dict[str, dict[str, str]] = {}
@@ -800,8 +837,9 @@ class V1Editor:
             )
 
             if method_name == "target_only":
+                aux_tensor = builder._compute_aux_maps(eps_src, target_noise, latents, source_latent, attention_map)
                 mask = torch.ones_like(eps_src[:, :1])
-                aux_tensor = {"mask": mask}
+                aux_tensor["mask"] = mask
                 eps = eps_tar
             else:
                 mask, aux_tensor = builder.build(eps_src, target_noise, latents, source_latent, attention_map)
@@ -902,8 +940,11 @@ class V1Editor:
 
         selected_dir = output_dir / "selected_steps"
         selected_dir.mkdir(parents=True, exist_ok=True)
-        step_count = min(self.config.mask.selected_step_count, len(attention_history))
-        indices = np.linspace(0, len(attention_history) - 1, num=step_count, dtype=int).tolist()
+        indices = _select_step_indices(
+            len(attention_history),
+            self.config.mask.selected_step_count,
+            self.config.mask.selected_step_stride,
+        )
         manifest: dict[str, str] = {}
         for index in indices:
             label = f"step_{index:02d}"

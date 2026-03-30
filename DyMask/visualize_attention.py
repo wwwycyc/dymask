@@ -35,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dtype", default="float16")
     parser.add_argument("--allow-download", action="store_true")
     parser.add_argument("--selected-step-count", type=int, default=5)
+    parser.add_argument("--selected-step-stride", type=int, default=None)
     return parser
 
 
@@ -52,6 +53,7 @@ def build_config(args: argparse.Namespace) -> ExperimentConfig:
     config.runtime.local_files_only = not args.allow_download
     config.metrics.clip_local_files_only = not args.allow_download
     config.mask.selected_step_count = args.selected_step_count
+    config.mask.selected_step_stride = args.selected_step_stride if args.selected_step_stride and args.selected_step_stride > 0 else None
     return config
 
 

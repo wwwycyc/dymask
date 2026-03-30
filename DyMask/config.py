@@ -68,6 +68,7 @@ class MaskConfig:
     smoothing_kernel: int = 5
     attention_locations: tuple[str, ...] = ("down", "mid", "up")
     selected_step_count: int = 5
+    selected_step_stride: int | None = None
 
 
 @dataclass

@@ -151,6 +151,14 @@ Method display names:
 - `discrepancy_latent` -> `D_t - C_t`
 - `full_dynamic_mask` -> `Full`
 
+Current raw-mask formulas:
+- `discrepancy_only`: `raw = D_t`
+- `discrepancy_attention`: `raw = w_d * D_t + w_a * A_t`
+- `discrepancy_latent`: `raw = w_d * D_t - w_c * C_t`
+- `full_dynamic_mask`: `raw = w_d * D_t + w_a * A_t - w_c * (1 - A_t) * C_t`
+
+For `full_dynamic_mask`, the latent-drift penalty is now attention-gated, so high-attention regions keep more editing freedom while low-attention regions receive a stronger `C_t` penalty.
+
 ## Common Commands
 ### Run 8 samples on the default parquet
 ```powershell

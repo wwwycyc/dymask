@@ -106,6 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=[0.3, 0.5, 0.7],
     )
     parser.add_argument("--selected-step-count", type=int, default=5)
+    parser.add_argument("--selected-step-stride", type=int, default=None, help="Save feature maps every N edit steps.")
     parser.add_argument("--save-inversion-tensors", action="store_true")
     return parser
 
@@ -167,6 +168,7 @@ def build_config(args: argparse.Namespace) -> ExperimentConfig:
     config.mask.global_blend_alpha = args.global_blend_alpha
     config.mask.global_blend_alphas = tuple(args.global_blend_alphas)
     config.mask.selected_step_count = args.selected_step_count
+    config.mask.selected_step_stride = args.selected_step_stride if args.selected_step_stride and args.selected_step_stride > 0 else None
     config.save_inversion_tensors = args.save_inversion_tensors or args.phase == "phase0"
     config.skip_metrics = args.skip_metrics
     config.dry_run = args.dry_run
@@ -311,6 +313,28 @@ def build_sample_overview(
         title=sample.sample_id,
     )
     overview_path = sample.sample_dir / "overview.png"
+    save_image(overview_path, overview)
+    return overview_path
+
+
+def build_run_overview(run_dir: Path, samples: list[MaterializedSample]) -> Path | None:
+    items: list[tuple[str, np.ndarray]] = []
+    for sample in samples:
+        overview_path = sample.sample_dir / "overview.png"
+        if not overview_path.exists():
+            continue
+        items.append((sample.sample_id, np.asarray(Image.open(overview_path).convert("RGB"))))
+    if not items:
+        return None
+
+    columns = 2 if len(items) <= 4 else 4
+    overview = compose_labeled_overview(
+        items,
+        columns=columns,
+        tile_size=(960, 560),
+        title=run_dir.name,
+    )
+    overview_path = run_dir / "overview_all_samples.png"
     save_image(overview_path, overview)
     return overview_path
 
@@ -606,6 +630,7 @@ def main(argv: list[str] | None = None) -> None:
         case_rows,
         overview_methods,
     )
+    run_overview_path = build_run_overview(run_dir, run_samples)
 
     logger.log(
         stage="实验汇总",
@@ -621,6 +646,7 @@ def main(argv: list[str] | None = None) -> None:
             "summary_metrics_json": str(run_dir / "metrics_summary.json"),
             "overview_method_case_metrics_csv": str(overview_method_case_table_path),
             "overview_method_summary_metrics_csv": str(overview_method_summary_table_path),
+            "overview_all_samples_path": str(run_overview_path) if run_overview_path else None,
         },
         conclusion="当前阶段的可视化、指标、日志和样本留存已齐备。",
         next_step="按顺序进入下一阶段，而不是一次性堆叠所有模块。",
