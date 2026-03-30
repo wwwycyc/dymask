@@ -23,17 +23,70 @@ class EditDatasetRecord:
 
 
 @dataclass
+class SampleCoreInput:
+    source_image_path: Path
+    target_prompt: str
+    target_token_hints: tuple[str, ...] = ()
+
+
+@dataclass
+class SampleMetadata:
+    source_prompt: str | None = None
+    edit_prompt: str | None = None
+    blended_word: str | None = None
+    extras: dict[str, Any] = field(default_factory=dict)
+    gt_mask: np.ndarray | None = None
+
+    def to_json_dict(self) -> dict[str, Any]:
+        return {
+            "source_prompt": self.source_prompt,
+            "edit_prompt": self.edit_prompt,
+            "blended_word": self.blended_word,
+            "extras": self.extras,
+            "has_gt_mask": self.gt_mask is not None,
+        }
+
+
+@dataclass
 class MaterializedSample:
     sample_id: str
     row_index: int
-    source_prompt: str
-    edit_prompt: str
-    target_prompt: str
-    source_image_path: Path
+    core_input: SampleCoreInput
     target_image_path: Path | None
     sample_dir: Path
-    extras: dict[str, Any] = field(default_factory=dict)
-    gt_mask: np.ndarray | None = None  # H×W uint8, 1=edit region (PIE-Bench)
+    metadata: SampleMetadata = field(default_factory=SampleMetadata)
+
+    @property
+    def source_image_path(self) -> Path:
+        return self.core_input.source_image_path
+
+    @property
+    def target_prompt(self) -> str:
+        return self.core_input.target_prompt
+
+    @property
+    def target_token_hints(self) -> tuple[str, ...]:
+        return self.core_input.target_token_hints
+
+    @property
+    def source_prompt(self) -> str:
+        return self.metadata.source_prompt or ""
+
+    @property
+    def edit_prompt(self) -> str:
+        return self.metadata.edit_prompt or ""
+
+    @property
+    def blended_word(self) -> str | None:
+        return self.metadata.blended_word
+
+    @property
+    def extras(self) -> dict[str, Any]:
+        return self.metadata.extras
+
+    @property
+    def gt_mask(self) -> np.ndarray | None:
+        return self.metadata.gt_mask
 
 
 @dataclass

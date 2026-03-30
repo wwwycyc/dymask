@@ -27,6 +27,18 @@ def build_runtime_and_metrics(run_dir: Path) -> tuple[RuntimeConfig, MetricConfi
     return runtime, metrics
 
 
+def parse_sample_payload(payload: dict) -> dict[str, object]:
+    core_input = payload.get("core_input") or {}
+    metadata = payload.get("metadata") or {}
+    return {
+        "sample_id": payload["sample_id"],
+        "target_prompt": core_input.get("target_prompt", payload.get("target_prompt", "")),
+        "source_prompt": metadata.get("source_prompt", payload.get("source_prompt", "")),
+        "edit_prompt": metadata.get("edit_prompt", payload.get("edit_prompt", "")),
+        "target_reference_path": payload.get("target_reference_path"),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Backfill metrics for an existing run directory.")
     parser.add_argument("run_dir", help="Run directory under runs/dymask_v1.")
@@ -42,10 +54,10 @@ def main() -> None:
 
     samples_dir = run_dir / "samples"
     for sample_dir in sorted(path for path in samples_dir.iterdir() if path.is_dir()):
-        sample_meta = json.loads((sample_dir / "sample.json").read_text(encoding="utf-8"))
+        sample_meta = parse_sample_payload(json.loads((sample_dir / "sample.json").read_text(encoding="utf-8")))
         source_image = load_image(sample_dir / "source.png")
         reconstruction_image = load_image(sample_dir / "source_reconstruction.png")
-        target_reference_path = sample_meta.get("target_reference_path")
+        target_reference_path = sample_meta["target_reference_path"]
         target_reference = load_image(Path(target_reference_path)) if target_reference_path else None
 
         phase0_row = {

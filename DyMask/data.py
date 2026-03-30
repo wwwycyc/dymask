@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 import pyarrow.parquet as pq
 
-from .schemas import EditDatasetRecord, MaterializedSample, SampleManifestEntry
+from .schemas import EditDatasetRecord, MaterializedSample, SampleCoreInput, SampleManifestEntry, SampleMetadata
 from .utils import decode_image_bytes, decode_piebench_rle, prepare_image, save_csv_records, save_image, save_json
 
 
@@ -159,31 +160,47 @@ class MagicBrushParquetDataset:
                 target_image = prepare_image(decode_image_bytes(record.edited_image_bytes), image_size)
                 save_image(target_path, target_image)
                 target_reference_path = str(target_path)
+            core_payload = {
+                "source_image_path": str(source_path),
+                "target_prompt": record.edited_prompt,
+                "target_token_hints": [],
+            }
+            metadata_payload = {
+                "source_prompt": record.original_prompt,
+                "edit_prompt": record.edit_prompt,
+                "blended_word": None,
+                "extras": record.extras,
+                "has_gt_mask": False,
+            }
             sample_payload = {
                 "sample_id": sample_id,
                 "row_index": record.row_index,
                 "record_id": record.record_id,
-                "source_prompt": record.original_prompt,
-                "edit_prompt": record.edit_prompt,
-                "target_prompt": record.edited_prompt,
+                "core_input": core_payload,
+                "metadata": metadata_payload,
                 "original_image_path": record.original_image_path,
                 "edited_image_path": record.edited_image_path,
-                "source_image_path": str(source_path),
                 "target_reference_path": target_reference_path,
-                "extras": record.extras,
             }
             save_json(meta_path, sample_payload)
 
             materialized_sample = MaterializedSample(
                 sample_id=sample_id,
                 row_index=record.row_index,
-                source_prompt=record.original_prompt,
-                edit_prompt=record.edit_prompt,
-                target_prompt=record.edited_prompt,
-                source_image_path=source_path,
+                core_input=SampleCoreInput(
+                    source_image_path=source_path,
+                    target_prompt=record.edited_prompt,
+                    target_token_hints=(),
+                ),
                 target_image_path=target_path if target_reference_path else None,
                 sample_dir=sample_dir,
-                extras=record.extras,
+                metadata=SampleMetadata(
+                    source_prompt=record.original_prompt,
+                    edit_prompt=record.edit_prompt,
+                    blended_word=None,
+                    extras=record.extras,
+                    gt_mask=None,
+                ),
             )
             manifest_entry = SampleManifestEntry(
                 sample_id=sample_id,
@@ -235,8 +252,13 @@ class PIEBenchDataset:
             key = self._keys[idx]
             entry = self._data[key]
             image_full_path = self.pie_bench_dir / "annotation_images" / entry["image_path"]
-            # strip [] from editing_prompt to get clean target_prompt
-            target_prompt = entry["editing_prompt"].replace("[", "").replace("]", "")
+            editing_prompt_raw = entry["editing_prompt"]
+            target_prompt = editing_prompt_raw.replace("[", "").replace("]", "")
+            target_token_hints = tuple(
+                term.strip()
+                for term in re.findall(r"\[([^\]]+)\]", editing_prompt_raw)
+                if term.strip()
+            )
             blended_word = entry.get("blended_word", "").split()[0] if entry.get("blended_word") else ""
             rle = entry.get("mask", [])
             gt_mask = decode_piebench_rle(rle) if rle else None
@@ -249,6 +271,7 @@ class PIEBenchDataset:
                 editing_instruction=entry.get("editing_instruction", ""),
                 editing_type_id=entry.get("editing_type_id", ""),
                 blended_word=blended_word,
+                target_token_hints=target_token_hints,
                 gt_mask=gt_mask,
             ))
         return records
@@ -273,16 +296,27 @@ class PIEBenchDataset:
             source_path = sample_dir / "source.png"
             save_image(source_path, source_arr)
 
+            core_payload = {
+                "source_image_path": str(source_path),
+                "target_prompt": record.target_prompt,
+                "target_token_hints": list(record.target_token_hints),
+            }
+            metadata_payload = {
+                "source_prompt": record.original_prompt,
+                "edit_prompt": record.editing_instruction,
+                "blended_word": record.blended_word,
+                "extras": {
+                    "dataset_format": "piebench",
+                    "editing_type_id": record.editing_type_id,
+                },
+                "has_gt_mask": record.gt_mask is not None,
+            }
             meta = {
                 "sample_id": sample_id,
                 "row_index": record.row_index,
                 "key": record.key,
-                "source_prompt": record.original_prompt,
-                "edit_prompt": record.editing_instruction,
-                "target_prompt": record.target_prompt,
-                "editing_type_id": record.editing_type_id,
-                "blended_word": record.blended_word,
-                "source_image_path": str(source_path),
+                "core_input": core_payload,
+                "metadata": metadata_payload,
                 "target_reference_path": None,
             }
             save_json(sample_dir / "sample.json", meta)
@@ -290,18 +324,23 @@ class PIEBenchDataset:
             materialized_sample = MaterializedSample(
                 sample_id=sample_id,
                 row_index=record.row_index,
-                source_prompt=record.original_prompt,
-                edit_prompt=record.editing_instruction,
-                target_prompt=record.target_prompt,
-                source_image_path=source_path,
+                core_input=SampleCoreInput(
+                    source_image_path=source_path,
+                    target_prompt=record.target_prompt,
+                    target_token_hints=record.target_token_hints,
+                ),
                 target_image_path=None,
                 sample_dir=sample_dir,
-                extras={
-                    "dataset_format": "piebench",
-                    "blended_words": record.blended_word,
-                    "editing_type_id": record.editing_type_id,
-                },
-                gt_mask=record.gt_mask,
+                metadata=SampleMetadata(
+                    source_prompt=record.original_prompt,
+                    edit_prompt=record.editing_instruction,
+                    blended_word=record.blended_word or None,
+                    extras={
+                        "dataset_format": "piebench",
+                        "editing_type_id": record.editing_type_id,
+                    },
+                    gt_mask=record.gt_mask,
+                ),
             )
             manifest_entry = SampleManifestEntry(
                 sample_id=sample_id,
@@ -330,4 +369,5 @@ class PIEBenchRecord:
     editing_instruction: str
     editing_type_id: str
     blended_word: str
+    target_token_hints: tuple[str, ...] = dc_field(default_factory=tuple)
     gt_mask: np.ndarray | None = None

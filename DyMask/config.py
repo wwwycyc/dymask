@@ -19,6 +19,14 @@ class RuntimeConfig:
     attention_slicing: bool = True
     vae_slicing: bool = True
     enable_cpu_offload: bool = False
+    sample_batch_size: int = 1
+    min_sample_batch_size: int = 1
+    auto_batch_fallback: bool = True
+    batch_warmup_probe: bool = True
+    enable_tf32: bool = False
+    channels_last: bool = False
+    enable_xformers: bool = False
+    clear_cuda_cache_between_methods: bool = True
 
     @property
     def num_ddim_steps(self) -> int:
@@ -46,6 +54,7 @@ class MaskConfig:
     mode: str = "dynamic"
     global_blend_alpha: float = 0.45
     global_blend_alphas: tuple[float, ...] = (0.3, 0.5, 0.7)
+    discrepancy_use_cfg: bool = False
     discrepancy_weight: float = 0.55
     attention_weight: float = 0.30
     latent_weight: float = 0.15
@@ -81,6 +90,7 @@ class ExperimentConfig:
         "global_blend_0.7",
         "discrepancy_only",
         "discrepancy_attention",
+        "discrepancy_latent",
         "full_dynamic_mask",
     )
     phase: str = "custom"

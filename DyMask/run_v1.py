@@ -17,7 +17,7 @@ from DyMask.config import ExperimentConfig
 from DyMask.data import MagicBrushParquetDataset, PIEBenchDataset
 from DyMask.logging_utils import MarkdownExperimentLogger
 from DyMask.metrics import MetricRunner
-from DyMask.schemas import MaterializedSample, SampleManifestEntry
+from DyMask.schemas import MaterializedSample, SampleCoreInput, SampleManifestEntry, SampleMetadata
 from DyMask.utils import compose_labeled_overview, make_timestamped_run_dir, save_csv_records, save_image, save_json
 from DyMask.v1 import V1Editor
 
@@ -45,7 +45,7 @@ METHOD_DISPLAY_NAMES = {
     "global_blend": "global blend",
     "discrepancy_only": "D_t",
     "discrepancy_attention": "D_t + A_t",
-    "discrepancy_latent": "D_t + C_t",
+    "discrepancy_latent": "D_t - C_t",
     "full_dynamic_mask": "Full",
 }
 
@@ -69,6 +69,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--guidance-scale", type=float, default=7.5)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--dtype", default="float16")
+    parser.add_argument("--sample-batch-size", type=int, default=1, help="Number of samples to edit together per method on one GPU.")
+    parser.add_argument("--min-sample-batch-size", type=int, default=1, help="Lowest batch size allowed when auto fallback is enabled.")
+    parser.add_argument("--disable-auto-batch-fallback", action="store_true", help="Disable automatic retry with smaller sample batches after CUDA OOM.")
+    parser.add_argument("--disable-batch-warmup-probe", action="store_true", help="Skip the one-step preflight batch-size probe before full editing.")
+    parser.add_argument("--enable-tf32", action="store_true")
+    parser.add_argument("--channels-last", action="store_true")
+    parser.add_argument("--enable-xformers", action="store_true")
+    parser.add_argument("--keep-cuda-cache", action="store_true", help="Do not call torch.cuda.empty_cache() between methods.")
+    parser.add_argument("--disable-attention-slicing", action="store_true")
+    parser.add_argument("--disable-vae-slicing", action="store_true")
     parser.add_argument("--allow-download", action="store_true")
     parser.add_argument("--skip-metrics", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -110,6 +120,7 @@ def resolve_methods(args: argparse.Namespace) -> tuple[str, ...]:
         "global_blend_0.7",
         "discrepancy_only",
         "discrepancy_attention",
+        "discrepancy_latent",
         "full_dynamic_mask",
     )
 
@@ -132,6 +143,16 @@ def build_config(args: argparse.Namespace) -> ExperimentConfig:
     config.runtime.guidance_scale = args.guidance_scale
     config.runtime.device = args.device
     config.runtime.dtype = args.dtype
+    config.runtime.sample_batch_size = max(1, int(args.sample_batch_size))
+    config.runtime.min_sample_batch_size = max(1, min(int(args.min_sample_batch_size), config.runtime.sample_batch_size))
+    config.runtime.auto_batch_fallback = not args.disable_auto_batch_fallback
+    config.runtime.batch_warmup_probe = not args.disable_batch_warmup_probe
+    config.runtime.enable_tf32 = args.enable_tf32
+    config.runtime.channels_last = args.channels_last
+    config.runtime.enable_xformers = args.enable_xformers
+    config.runtime.clear_cuda_cache_between_methods = not args.keep_cuda_cache
+    config.runtime.attention_slicing = not args.disable_attention_slicing
+    config.runtime.vae_slicing = not args.disable_vae_slicing
     config.runtime.local_files_only = not args.allow_download
     config.metrics.clip_local_files_only = not args.allow_download
     config.methods = resolve_methods(args)
@@ -151,7 +172,13 @@ def materialize_from_sample_json(sample_json_path: Path, output_dir: Path) -> tu
     sample_dir = output_dir / sample_id
     sample_dir.mkdir(parents=True, exist_ok=True)
 
-    source_source_path = Path(payload["source_image_path"])
+    core_payload = payload.get("core_input") or {}
+    metadata_payload = payload.get("metadata") or {}
+    source_image_value = core_payload.get("source_image_path") or payload["source_image_path"]
+    target_prompt_value = core_payload.get("target_prompt") or payload["target_prompt"]
+    target_token_hints = core_payload.get("target_token_hints") or payload.get("target_token_hints") or []
+
+    source_source_path = Path(source_image_value)
     target_source = payload.get("target_reference_path")
     target_source_path = Path(target_source) if target_source else None
     source_path = sample_dir / "source.png"
@@ -163,27 +190,45 @@ def materialize_from_sample_json(sample_json_path: Path, output_dir: Path) -> tu
         rewritten_target_reference_path = str(target_path)
 
     rewritten_payload = dict(payload)
-    rewritten_payload["source_image_path"] = str(source_path)
+    rewritten_payload["core_input"] = {
+        "source_image_path": str(source_path),
+        "target_prompt": target_prompt_value,
+        "target_token_hints": list(target_token_hints),
+    }
+    rewritten_payload["metadata"] = {
+        "source_prompt": metadata_payload.get("source_prompt", payload.get("source_prompt")),
+        "edit_prompt": metadata_payload.get("edit_prompt", payload.get("edit_prompt")),
+        "blended_word": metadata_payload.get("blended_word", payload.get("blended_word")),
+        "extras": metadata_payload.get("extras", payload.get("extras") or {}),
+        "has_gt_mask": metadata_payload.get("has_gt_mask", False),
+    }
     rewritten_payload["target_reference_path"] = rewritten_target_reference_path
     save_json(sample_dir / "sample.json", rewritten_payload)
 
     materialized_sample = MaterializedSample(
         sample_id=sample_id,
         row_index=int(payload["row_index"]),
-        source_prompt=payload["source_prompt"],
-        edit_prompt=payload["edit_prompt"],
-        target_prompt=payload["target_prompt"],
-        source_image_path=source_path,
+        core_input=SampleCoreInput(
+            source_image_path=source_path,
+            target_prompt=target_prompt_value,
+            target_token_hints=tuple(str(term).strip() for term in target_token_hints if str(term).strip()),
+        ),
         target_image_path=target_path if rewritten_target_reference_path else None,
         sample_dir=sample_dir,
-        extras=payload.get("extras") or {},
+        metadata=SampleMetadata(
+            source_prompt=metadata_payload.get("source_prompt", payload.get("source_prompt")),
+            edit_prompt=metadata_payload.get("edit_prompt", payload.get("edit_prompt")),
+            blended_word=metadata_payload.get("blended_word", payload.get("blended_word")),
+            extras=metadata_payload.get("extras", payload.get("extras") or {}),
+            gt_mask=None,
+        ),
     )
     manifest_entry = SampleManifestEntry(
         sample_id=sample_id,
         row_index=int(payload["row_index"]),
-        source_prompt=payload["source_prompt"],
-        edit_prompt=payload["edit_prompt"],
-        target_prompt=payload["target_prompt"],
+        source_prompt=materialized_sample.source_prompt,
+        edit_prompt=materialized_sample.edit_prompt,
+        target_prompt=materialized_sample.target_prompt,
         source_image_path=str(source_path),
         target_image_path=rewritten_target_reference_path,
         record_id=payload.get("record_id"),
@@ -198,7 +243,7 @@ def phase_title(phase: str) -> str:
         "phase2": "Phase 2 全局融合基线",
         "phase3": "Phase 3 仅 D_t",
         "phase4": "Phase 4 D_t + A_t",
-        "phase5": "Phase 5 D_t + A_t + C_t",
+        "phase5": "Phase 5 D_t + A_t - C_t",
         "custom": "Custom 多方法运行",
     }
     return titles.get(phase, phase)
@@ -212,29 +257,45 @@ def display_method_name(method_name: str) -> str:
     return METHOD_DISPLAY_NAMES.get(canonical_method_name(method_name), method_name)
 
 
+def resolve_overview_methods(method_names: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    resolved: list[str] = []
+    for method_name in method_names:
+        canonical_name = canonical_method_name(str(method_name))
+        if canonical_name not in METHOD_DISPLAY_NAMES:
+            continue
+        if canonical_name in resolved:
+            continue
+        resolved.append(canonical_name)
+    return tuple(resolved)
+
+
 def build_sample_overview(
     sample: MaterializedSample,
     method_results: list,
     image_size: int,
+    overview_methods: tuple[str, ...],
 ) -> Path | None:
     result_by_method = {
         canonical_method_name(result.method_name): result
         for result in method_results
     }
-    if not all(method in result_by_method for method in OVERVIEW_METHODS):
+    active_methods = tuple(method for method in overview_methods if method in result_by_method)
+    if not active_methods:
         return None
 
     items: list[tuple[str, np.ndarray]] = [
         ("source", np.asarray(Image.open(sample.source_image_path).convert("RGB"))),
     ]
-    for method_name in OVERVIEW_METHODS:
+    for method_name in active_methods:
         result = result_by_method[method_name]
         items.append((display_method_name(method_name), np.asarray(Image.open(result.edited_image_path).convert("RGB"))))
 
-    full_result = result_by_method["full_dynamic_mask"]
+    full_result = result_by_method.get("full_dynamic_mask")
+    if full_result is None:
+        return None
     if full_result.aux_summary_path is None or not Path(full_result.aux_summary_path).exists():
         return None
-    items.append(("D/A/C/mask maps", np.asarray(Image.open(full_result.aux_summary_path).convert("RGB"))))
+    items.append(("mask overview", np.asarray(Image.open(full_result.aux_summary_path).convert("RGB"))))
 
     overview = compose_labeled_overview(
         items,
@@ -261,8 +322,12 @@ def _metric_std(values: list[float | None]) -> float | None:
     return float(np.std(numeric, ddof=0))
 
 
-def write_five_method_metric_tables(run_dir: Path, case_rows: list[dict]) -> tuple[Path, Path]:
-    ordered_methods = list(OVERVIEW_METHODS)
+def write_overview_method_metric_tables(
+    run_dir: Path,
+    case_rows: list[dict],
+    overview_methods: tuple[str, ...],
+) -> tuple[Path, Path]:
+    ordered_methods = list(overview_methods)
     filtered_rows: list[dict[str, object]] = []
 
     for row in case_rows:
@@ -270,7 +335,7 @@ def write_five_method_metric_tables(run_dir: Path, case_rows: list[dict]) -> tup
         if not isinstance(method_name, str):
             continue
         canonical_name = canonical_method_name(method_name)
-        if canonical_name not in OVERVIEW_METHODS:
+        if canonical_name not in ordered_methods:
             continue
         filtered_rows.append(
             {
@@ -282,6 +347,9 @@ def write_five_method_metric_tables(run_dir: Path, case_rows: list[dict]) -> tup
                 "target_psnr": row.get("edit_ref_psnr"),
                 "source_lpips": row.get("edit_source_lpips"),
                 "source_psnr": row.get("edit_source_psnr"),
+                "outside_lpips": row.get("outside_lpips"),
+                "outside_psnr": row.get("outside_psnr"),
+                "locality_ratio": row.get("locality_ratio"),
             }
         )
 
@@ -292,7 +360,7 @@ def write_five_method_metric_tables(run_dir: Path, case_rows: list[dict]) -> tup
         )
     )
 
-    case_table_path = run_dir / "metrics_five_methods_case_level.csv"
+    case_table_path = run_dir / "metrics_overview_methods_case_level.csv"
     save_csv_records(case_table_path, filtered_rows)
 
     summary_rows: list[dict[str, object]] = []
@@ -314,12 +382,18 @@ def write_five_method_metric_tables(run_dir: Path, case_rows: list[dict]) -> tup
                 "source_lpips_std": _metric_std([row["source_lpips"] for row in method_rows]),
                 "source_psnr_mean": _metric_mean([row["source_psnr"] for row in method_rows]),
                 "source_psnr_std": _metric_std([row["source_psnr"] for row in method_rows]),
+                "outside_lpips_mean": _metric_mean([row["outside_lpips"] for row in method_rows]),
+                "outside_lpips_std": _metric_std([row["outside_lpips"] for row in method_rows]),
+                "outside_psnr_mean": _metric_mean([row["outside_psnr"] for row in method_rows]),
+                "outside_psnr_std": _metric_std([row["outside_psnr"] for row in method_rows]),
+                "locality_ratio_mean": _metric_mean([row["locality_ratio"] for row in method_rows]),
+                "locality_ratio_std": _metric_std([row["locality_ratio"] for row in method_rows]),
             }
         )
 
-    summary_table_path = run_dir / "metrics_five_methods_summary.csv"
+    summary_table_path = run_dir / "metrics_overview_methods_summary.csv"
     save_csv_records(summary_table_path, summary_rows)
-    save_json(run_dir / "metrics_five_methods_summary.json", {"summary": summary_rows})
+    save_json(run_dir / "metrics_overview_methods_summary.json", {"summary": summary_rows})
     return case_table_path, summary_table_path
 
 
@@ -416,8 +490,10 @@ def main() -> None:
     editor = V1Editor(pipe, config)
     metric_runner = None if config.skip_metrics else MetricRunner(config.runtime, config.metrics)
 
+    overview_methods = resolve_overview_methods(config.methods)
     case_rows: list[dict] = []
     run_samples = materialized_samples[: config.sampling.run_limit]
+    batch_results = editor.run_samples(run_samples)
     for sample in run_samples:
         logger.log(
             stage=phase_title(config.phase),
@@ -434,7 +510,7 @@ def main() -> None:
             next_step="保存 reconstruction、方法结果和指标。",
         )
 
-        inversion, method_results = editor.run_sample(sample)
+        inversion, method_results = batch_results[sample.sample_id]
         source_image = np.asarray(Image.open(sample.source_image_path).convert("RGB"))
         target_reference = None
         if sample.target_image_path is not None and Path(sample.target_image_path).exists():
@@ -492,7 +568,7 @@ def main() -> None:
             }
             case_rows.append(row)
 
-        overview_path = build_sample_overview(sample, method_results, config.runtime.image_size)
+        overview_path = build_sample_overview(sample, method_results, config.runtime.image_size, overview_methods)
 
         logger.log(
             stage=phase_title(config.phase),
@@ -515,7 +591,11 @@ def main() -> None:
         summary_rows = metric_runner.summarize(case_rows)
         save_csv_records(run_dir / "metrics_summary.csv", summary_rows)
         save_json(run_dir / "metrics_summary.json", {"summary": summary_rows})
-    five_method_case_table_path, five_method_summary_table_path = write_five_method_metric_tables(run_dir, case_rows)
+    overview_method_case_table_path, overview_method_summary_table_path = write_overview_method_metric_tables(
+        run_dir,
+        case_rows,
+        overview_methods,
+    )
 
     logger.log(
         stage="实验汇总",
@@ -529,8 +609,8 @@ def main() -> None:
             "case_metrics_csv": str(metrics_path),
             "summary_metrics_csv": str(run_dir / "metrics_summary.csv"),
             "summary_metrics_json": str(run_dir / "metrics_summary.json"),
-            "five_method_case_metrics_csv": str(five_method_case_table_path),
-            "five_method_summary_metrics_csv": str(five_method_summary_table_path),
+            "overview_method_case_metrics_csv": str(overview_method_case_table_path),
+            "overview_method_summary_metrics_csv": str(overview_method_summary_table_path),
         },
         conclusion="当前阶段的可视化、指标、日志和样本留存已齐备。",
         next_step="按顺序进入下一阶段，而不是一次性堆叠所有模块。",

@@ -27,6 +27,11 @@ def load_ntip2p_module():
 def build_stable_diffusion_pipeline(runtime: RuntimeConfig) -> StableDiffusionPipeline:
     device = runtime.device if torch.cuda.is_available() else "cpu"
     dtype = torch.float16 if device.startswith("cuda") and runtime.dtype == "float16" else torch.float32
+    if device.startswith("cuda"):
+        torch.backends.cuda.matmul.allow_tf32 = runtime.enable_tf32
+        torch.backends.cudnn.allow_tf32 = runtime.enable_tf32
+        if hasattr(torch, "set_float32_matmul_precision"):
+            torch.set_float32_matmul_precision("high" if runtime.enable_tf32 else "highest")
     pipe_kwargs = {
         "torch_dtype": dtype,
         "safety_checker": None,
@@ -44,12 +49,23 @@ def build_stable_diffusion_pipeline(runtime: RuntimeConfig) -> StableDiffusionPi
         pipe.enable_model_cpu_offload()
     else:
         pipe = pipe.to(device)
+    if runtime.channels_last and device.startswith("cuda"):
+        pipe.unet.to(memory_format=torch.channels_last)
+        try:
+            pipe.vae.to(memory_format=torch.channels_last)
+        except Exception:
+            pass
     if runtime.attention_slicing:
         pipe.enable_attention_slicing()
     if runtime.vae_slicing:
         try:
             pipe.vae.enable_slicing()
         except AttributeError:
+            pass
+    if runtime.enable_xformers:
+        try:
+            pipe.enable_xformers_memory_efficient_attention()
+        except Exception:
             pass
     return pipe
 

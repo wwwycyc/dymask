@@ -13,7 +13,7 @@ from DyMask.adapters import build_stable_diffusion_pipeline
 from DyMask.config import ExperimentConfig
 from DyMask.data import MagicBrushParquetDataset
 from DyMask.logging_utils import MarkdownExperimentLogger
-from DyMask.schemas import MaterializedSample, SampleManifestEntry
+from DyMask.schemas import MaterializedSample, SampleCoreInput, SampleMetadata
 from DyMask.utils import make_timestamped_run_dir, save_json
 from DyMask.v1 import V1Editor
 
@@ -57,29 +57,52 @@ def build_config(args: argparse.Namespace) -> ExperimentConfig:
 
 def materialize_from_sample_json(sample_json_path: Path, output_dir: Path) -> MaterializedSample:
     payload = json.loads(sample_json_path.read_text(encoding="utf-8"))
+    core_payload = payload.get("core_input") or {}
+    metadata_payload = payload.get("metadata") or {}
     sample_dir = output_dir / payload["sample_id"]
     sample_dir.mkdir(parents=True, exist_ok=True)
     source_path = sample_dir / "source.png"
-    shutil.copy2(Path(payload["source_image_path"]), source_path)
+    source_image_value = core_payload.get("source_image_path") or payload["source_image_path"]
+    target_prompt_value = core_payload.get("target_prompt") or payload["target_prompt"]
+    target_token_hints = core_payload.get("target_token_hints") or payload.get("target_token_hints") or []
+    shutil.copy2(Path(source_image_value), source_path)
     target_reference_path = payload.get("target_reference_path")
     target_path = None
     if target_reference_path:
         target_path = sample_dir / "target_reference.png"
         shutil.copy2(Path(target_reference_path), target_path)
     rewritten = dict(payload)
-    rewritten["source_image_path"] = str(source_path)
+    rewritten["core_input"] = {
+        "source_image_path": str(source_path),
+        "target_prompt": target_prompt_value,
+        "target_token_hints": list(target_token_hints),
+    }
+    rewritten["metadata"] = {
+        "source_prompt": metadata_payload.get("source_prompt", payload.get("source_prompt")),
+        "edit_prompt": metadata_payload.get("edit_prompt", payload.get("edit_prompt")),
+        "blended_word": metadata_payload.get("blended_word", payload.get("blended_word")),
+        "extras": metadata_payload.get("extras", payload.get("extras") or {}),
+        "has_gt_mask": metadata_payload.get("has_gt_mask", False),
+    }
     rewritten["target_reference_path"] = str(target_path) if target_path else None
     save_json(sample_dir / "sample.json", rewritten)
     return MaterializedSample(
         sample_id=payload["sample_id"],
         row_index=int(payload["row_index"]),
-        source_prompt=payload["source_prompt"],
-        edit_prompt=payload["edit_prompt"],
-        target_prompt=payload["target_prompt"],
-        source_image_path=source_path,
+        core_input=SampleCoreInput(
+            source_image_path=source_path,
+            target_prompt=target_prompt_value,
+            target_token_hints=tuple(str(term).strip() for term in target_token_hints if str(term).strip()),
+        ),
         target_image_path=target_path,
         sample_dir=sample_dir,
-        extras=payload.get("extras") or {},
+        metadata=SampleMetadata(
+            source_prompt=metadata_payload.get("source_prompt", payload.get("source_prompt")),
+            edit_prompt=metadata_payload.get("edit_prompt", payload.get("edit_prompt")),
+            blended_word=metadata_payload.get("blended_word", payload.get("blended_word")),
+            extras=metadata_payload.get("extras", payload.get("extras") or {}),
+            gt_mask=None,
+        ),
     )
 
 

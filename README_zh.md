@@ -150,19 +150,20 @@ python DyMask/run_v1.py --num-inversion-steps 10 --num-edit-steps 20
 - `custom`
   手动指定 `--methods`
 
-## 10. 常用五组实验
-固定五组方法：
+## 10. 常用六组实验
+固定六组方法：
 
 - `target_only`
 - `global_blend`
 - `discrepancy_only`
 - `discrepancy_attention`
+- `discrepancy_latent`
 - `full_dynamic_mask`
 
 推荐命令：
 
 ```powershell
-python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask
+python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask
 ```
 
 显示名称对应：
@@ -170,22 +171,23 @@ python DyMask/run_v1.py --phase custom --methods target_only global_blend discre
 - `global_blend` -> `global blend`
 - `discrepancy_only` -> `D_t`
 - `discrepancy_attention` -> `D_t + A_t`
+- `discrepancy_latent` -> `D_t - C_t`
 - `full_dynamic_mask` -> `Full`
 
 ## 11. 常用启动命令
 ### 11.1 在默认 parquet 上跑 8 个样本
 ```powershell
-python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask --sample-count 8 --run-limit 8
+python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask --sample-count 8 --run-limit 8
 ```
 
 ### 11.2 在 `V1-00000-of-00001.parquet` 上跑 8 个样本
 ```powershell
-python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask --parquet-path assets/data/V1-00000-of-00001.parquet --sample-count 8 --run-limit 8
+python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask --parquet-path assets/data/V1-00000-of-00001.parquet --sample-count 8 --run-limit 8
 ```
 
 ### 11.3 只跑指定行
 ```powershell
-python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --row-indices 6 26 28 --run-limit 3 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask
+python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --row-indices 6 26 28 --run-limit 3 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask
 ```
 
 ### 11.4 单样本最小验证
@@ -205,7 +207,7 @@ python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --s
 
 ### 11.7 跳过指标
 ```powershell
-python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask --skip-metrics
+python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask --skip-metrics
 ```
 
 ### 11.8 使用 static mask
@@ -215,7 +217,7 @@ python DyMask/run_v1.py --phase phase4 --mask-mode static
 
 ### 11.9 从已有 sample.json 复跑
 ```powershell
-python DyMask/run_v1.py --sample-json runs/dymask_v1/<run_dir>/samples/<sample_id>/sample.json --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask
+python DyMask/run_v1.py --sample-json runs/dymask_v1/<run_dir>/samples/<sample_id>/sample.json --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask
 ```
 
 ## 12. Attention 探针脚本
@@ -264,7 +266,7 @@ python DyMask/backfill_run_metrics.py runs/dymask_v1/<run_dir>
 说明：
 - 这个脚本只回填通用指标
 - 不重建 overview
-- 不重建五组专用 summary 表
+- 不重建 overview 方法对比 summary 表
 
 ## 14. inspect_pt.py
 查看张量文件：
@@ -285,9 +287,9 @@ runs/dymask_v1/<run_dir>/
   metrics_case_level.csv
   metrics_summary.csv
   metrics_summary.json
-  metrics_five_methods_case_level.csv
-  metrics_five_methods_summary.csv
-  metrics_five_methods_summary.json
+  metrics_overview_methods_case_level.csv
+  metrics_overview_methods_summary.csv
+  metrics_overview_methods_summary.json
   samples/
     <sample_id>/
       sample.json
@@ -310,16 +312,39 @@ runs/dymask_v1/<run_dir>/
 说明：
 - `target_reference.png` 只有数据集本身提供目标编辑图时才存在
 
+当前生成的 `sample.json` 已按“核心输入 / 可选元信息”分层：
+
+```text
+sample.json
+  sample_id
+  row_index
+  record_id 或 key
+  core_input
+    source_image_path
+    target_prompt
+    target_token_hints
+  metadata
+    source_prompt
+    edit_prompt
+    blended_word
+    extras
+    has_gt_mask
+  target_reference_path
+```
+
+推理主链只依赖 `core_input`；`metadata` 主要用于日志、分析、评估和可选 token hint。
+
 ## 16. overview.png
-每个样本的 `overview.png` 当前包含 7 张图：
+每个样本的 `overview.png` 当前包含 8 张图：
 
 1. source
 2. target-only
 3. global blend
 4. D_t
 5. D_t + A_t
-6. Full
-7. D/A/C/mask maps
+6. D_t - C_t
+7. Full
+8. D/A/C/mask maps
 
 ## 17. 指标说明
 常见字段：
@@ -371,17 +396,17 @@ runs/dymask_v1/<run_dir>/
 ## 19. 建议工作流
 ### 19.1 快速 sanity check
 ```powershell
-python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --row-indices 6 --sample-count 1 --run-limit 1 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask --skip-metrics
+python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --row-indices 6 --sample-count 1 --run-limit 1 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask --skip-metrics
 ```
 
 ### 19.2 跑 8 个样本
 ```powershell
-python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --sample-count 8 --run-limit 8 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask
+python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --sample-count 8 --run-limit 8 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask
 ```
 
 ### 19.3 看结果
 - 先看 `samples/<sample_id>/overview.png`
-- 再看 `metrics_five_methods_summary.csv`
+- 再看 `metrics_overview_methods_summary.csv`
 - 如果视觉差异不明显，再看 `step_diagnostics.json`
 
 ### 19.4 做 attention 探针
@@ -391,5 +416,5 @@ python DyMask/visualize_attention.py --parquet-path assets/data/V1-00000-of-0000
 
 ## 20. 默认推荐命令模板
 ```powershell
-python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask --parquet-path <your.parquet> --sample-count 8 --run-limit 8 --num-inversion-steps 10 --num-edit-steps 10
+python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask --parquet-path <your.parquet> --sample-count 8 --run-limit 8 --num-inversion-steps 10 --num-edit-steps 10
 ```

@@ -13,7 +13,7 @@ from PIL import Image
 from .adapters import clear_cuda_memory, configure_ntip2p_module, load_ntip2p_module
 from .config import ExperimentConfig, MaskConfig, RuntimeConfig
 from .schemas import InversionOutput, MaterializedSample, MethodResult, TextCondition
-from .utils import mask_to_rgb, save_csv_records, save_image, save_json, summarize_step_maps
+from .utils import make_labeled_strip, mask_to_rgb, save_csv_records, save_image, save_json, summarize_step_maps
 
 
 def _normalize_tensor_map(tensor: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
@@ -99,7 +99,10 @@ class EmptyPromptSourcePredictor:
 
     @torch.no_grad()
     def predict(self, latents: torch.Tensor, timestep: torch.Tensor) -> torch.Tensor:
-        return self.pipe.unet(latents, timestep, encoder_hidden_states=self.condition.embeddings).sample
+        context = self.condition.embeddings
+        if context.shape[0] != latents.shape[0]:
+            context = context.expand(latents.shape[0], -1, -1)
+        return self.pipe.unet(latents, timestep, encoder_hidden_states=context).sample
 
 
 class TargetPromptPredictor:
@@ -109,42 +112,60 @@ class TargetPromptPredictor:
         self.uncond_condition = prompt_encoder.encode("")
 
     @torch.no_grad()
-    def predict(self, latents: torch.Tensor, timestep: torch.Tensor, target_condition: TextCondition) -> tuple[torch.Tensor, dict[str, float]]:
+    def predict(
+        self,
+        latents: torch.Tensor,
+        timestep: torch.Tensor,
+        target_embeddings: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[str, float | list[float]]]:
+        batch_size = latents.shape[0]
+        if target_embeddings.shape[0] != batch_size:
+            raise ValueError(f"target_embeddings batch mismatch: expected {batch_size}, got {target_embeddings.shape[0]}")
         latents_input = torch.cat([latents, latents], dim=0)
-        context = torch.cat([self.uncond_condition.embeddings, target_condition.embeddings], dim=0)
+        uncond_embeddings = self.uncond_condition.embeddings.expand(batch_size, -1, -1)
+        context = torch.cat([uncond_embeddings, target_embeddings], dim=0)
         noise = self.pipe.unet(latents_input, timestep, encoder_hidden_states=context).sample
         noise_uncond, noise_cond = noise.chunk(2, dim=0)
-        delta = (noise_cond - noise_uncond).abs().mean().item()
+        delta_per_sample = (noise_cond - noise_uncond).abs().flatten(1).mean(dim=1)
         guided_noise = noise_uncond + self.guidance_scale * (noise_cond - noise_uncond)
-        return guided_noise, {"delta": float(delta)}
-
+        return guided_noise, noise_cond, noise_uncond, {
+            "delta": float(delta_per_sample.mean().item()),
+            "delta_per_sample": [float(value) for value in delta_per_sample.detach().cpu().tolist()],
+        }
 
 def aggregate_step_cross_attention(attention_store, token_mask: torch.Tensor, target_hw: tuple[int, int], locations: tuple[str, ...]) -> torch.Tensor:
     averaged = attention_store.get_average_attention()
     maps: list[torch.Tensor] = []
     device = token_mask.device
-    token_mask = token_mask[0].to(device=device, dtype=torch.float32)
-    if token_mask.sum() <= 0:
-        token_mask = torch.ones_like(token_mask)
+    if token_mask.ndim == 1:
+        token_mask = token_mask.unsqueeze(0)
+    token_mask = token_mask.to(device=device, dtype=torch.float32)
+    empty_rows = token_mask.sum(dim=-1, keepdim=True) <= 0
+    if empty_rows.any():
+        token_mask = token_mask.clone()
+        token_mask[empty_rows.expand_as(token_mask)] = 1.0
+    batch_size = int(token_mask.shape[0])
     for location in locations:
         for item in averaged.get(f"{location}_cross", []):
             pixel_count = item.shape[1]
             resolution = int(math.sqrt(pixel_count))
             if resolution * resolution != pixel_count:
                 continue
-            reshaped = item.reshape(1, -1, resolution, resolution, item.shape[-1])[0]
-            token_weights = token_mask.to(reshaped.device).view(1, 1, 1, -1)
-            token_map = (reshaped * token_weights).sum(dim=-1) / token_weights.sum().clamp(min=1.0)
-            pooled = token_map.mean(dim=0, keepdim=True)
+            if item.shape[0] % batch_size != 0:
+                continue
+            reshaped = item.reshape(batch_size, -1, resolution, resolution, item.shape[-1])
+            token_weights = token_mask.to(reshaped.device)[:, None, None, None, :]
+            token_map = (reshaped * token_weights).sum(dim=-1) / token_weights.sum(dim=-1).clamp(min=1.0)
+            pooled = token_map.mean(dim=1, keepdim=True)
             pooled = F.interpolate(
-                pooled.unsqueeze(0),
+                pooled,
                 size=target_hw,
                 mode="bilinear",
                 align_corners=False,
-            ).squeeze(0)
+            )
             maps.append(pooled)
     if not maps:
-        return torch.zeros((1, *target_hw), device=device, dtype=torch.float32)
+        return torch.zeros((batch_size, 1, *target_hw), device=device, dtype=torch.float32)
     return torch.stack(maps, dim=0).mean(dim=0).to(device=device, dtype=torch.float32)
 
 
@@ -159,8 +180,8 @@ class DynamicMaskBuilder:
 
     def build(
         self,
-        eps_src: torch.Tensor,
-        eps_tar: torch.Tensor,
+        reference_noise: torch.Tensor,
+        target_noise: torch.Tensor,
         latents: torch.Tensor,
         source_latent: torch.Tensor,
         attention_map: torch.Tensor,
@@ -173,15 +194,16 @@ class DynamicMaskBuilder:
                     blend_alpha = float(suffix)
                 except ValueError:
                     blend_alpha = self.mask_config.global_blend_alpha
-            mask = torch.full_like(eps_src[:, :1], blend_alpha)
+            mask = torch.full_like(reference_noise[:, :1], blend_alpha)
             return mask, {"mask": mask}
 
-        discrepancy = torch.abs(eps_tar - eps_src).mean(dim=1, keepdim=True)
+        # D_t compares the same prediction scale on both branches to avoid CFG amplification artifacts.
+        discrepancy = torch.abs(target_noise - reference_noise).mean(dim=1, keepdim=True)
         discrepancy = _normalize_tensor_map(discrepancy)
 
         if attention_map.ndim == 3:
             attention_map = attention_map.unsqueeze(0)
-        attention_map = attention_map.to(device=eps_src.device, dtype=eps_src.dtype)
+        attention_map = attention_map.to(device=reference_noise.device, dtype=reference_noise.dtype)
         attention_map = _normalize_tensor_map(attention_map)
 
         latent_drift = torch.abs(latents - source_latent).mean(dim=1, keepdim=True)
@@ -195,16 +217,15 @@ class DynamicMaskBuilder:
                 + self.mask_config.attention_weight * attention_map
             )
         elif self.variant == "discrepancy_latent":
-            weight_sum = self.mask_config.discrepancy_weight + self.mask_config.latent_weight
             raw_mask = (
-                self.mask_config.discrepancy_weight / weight_sum * discrepancy
-                + self.mask_config.latent_weight / weight_sum * latent_drift
+                self.mask_config.discrepancy_weight * discrepancy
+                - self.mask_config.latent_weight * latent_drift
             )
         else:
             raw_mask = (
                 self.mask_config.discrepancy_weight * discrepancy
                 + self.mask_config.attention_weight * attention_map
-                + self.mask_config.latent_weight * latent_drift
+                - self.mask_config.latent_weight * latent_drift
             )
 
         if self.mask_config.smoothing_kernel > 1:
@@ -214,7 +235,7 @@ class DynamicMaskBuilder:
 
         mask = torch.sigmoid((raw_mask - self.mask_config.threshold) * self.mask_config.temperature)
         mask = torch.clamp(mask, min=self.mask_config.min_value, max=self.mask_config.max_value)
-        mask = mask.to(device=eps_src.device, dtype=eps_src.dtype)
+        mask = mask.to(device=reference_noise.device, dtype=reference_noise.dtype)
 
         if self.mask_config.mode == "static":
             if self._static_mask is None:
@@ -243,39 +264,103 @@ class V1Editor:
         self.attention_store = self.ntip2p.AttentionStore()
         self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
 
+    @staticmethod
+    def _is_cuda_oom_error(exc: BaseException) -> bool:
+        if isinstance(exc, torch.cuda.OutOfMemoryError):
+            return True
+        message = str(exc).lower()
+        return "cuda" in message and "out of memory" in message
+
+    @staticmethod
+    def _next_batch_size(current: int, minimum: int) -> int:
+        if current <= minimum:
+            return minimum
+        next_batch = max(minimum, (current + 1) // 2)
+        if next_batch >= current:
+            next_batch = current - 1
+        return max(minimum, next_batch)
+
+    def _select_probe_method(self) -> str | None:
+        methods = list(self.config.methods)
+        if not methods:
+            return None
+        for preferred in ("full_dynamic_mask", "discrepancy_attention", "discrepancy_only", "target_only"):
+            if preferred in methods:
+                return preferred
+        return methods[0]
+
+    @torch.no_grad()
+    def _probe_method_batch_memory(
+        self,
+        samples: list[MaterializedSample],
+        inversions: list[InversionOutput],
+        target_conditions: list[TextCondition],
+        method_name: str,
+    ) -> None:
+        if not samples:
+            return
+
+        self._set_timesteps()
+        self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
+        latents = torch.cat(
+            [inversion.zt_src.detach().clone().to(self.pipe.device, dtype=self.pipe.unet.dtype) for inversion in inversions],
+            dim=0,
+        )
+        source_latents = torch.cat(
+            [
+                self._resample_source_latents(
+                    [latent.to(self.pipe.device, dtype=self.pipe.unet.dtype) for latent in inversion.src_latents],
+                    len(self.pipe.scheduler.timesteps),
+                )[0]
+                for inversion in inversions
+            ],
+            dim=0,
+        )
+        builder = DynamicMaskBuilder(self.config.mask, method_name)
+        builder.reset()
+        focus_masks = torch.cat(
+            [
+                self._build_focus_token_mask(condition, self._extract_focus_terms(sample)).to(self.pipe.device)
+                for sample, condition in zip(samples, target_conditions)
+            ],
+            dim=0,
+        )
+        target_embeddings = torch.cat(
+            [condition.embeddings.to(self.pipe.device, dtype=self.pipe.unet.dtype) for condition in target_conditions],
+            dim=0,
+        )
+        timestep = self.pipe.scheduler.timesteps[0]
+        try:
+            self.attention_store.reset()
+            eps_src = self.source_predictor.predict(latents, timestep)
+            self.attention_store.reset()
+            eps_tar, target_noise, _noise_uncond, _target_stats = self.target_predictor.predict(latents, timestep, target_embeddings)
+            attention_map = aggregate_step_cross_attention(
+                self.attention_store,
+                focus_masks,
+                target_hw=(latents.shape[-2], latents.shape[-1]),
+                locations=self.config.mask.attention_locations,
+            )
+            if method_name == "target_only":
+                eps = eps_tar
+            else:
+                mask, _aux_tensor = builder.build(eps_src, target_noise, latents, source_latents, attention_map)
+                eps = eps_src + mask * (eps_tar - eps_src)
+            probe_latents = self.pipe.scheduler.step(eps, timestep, latents).prev_sample
+            _ = self._decode_latents_batch(probe_latents)
+        finally:
+            self.attention_store.reset()
+            clear_cuda_memory()
+
     def _extract_focus_terms(self, sample: MaterializedSample) -> list[str]:
         terms: list[str] = []
+        for hint in sample.target_token_hints:
+            clean_hint = hint.strip()
+            if clean_hint:
+                terms.append(clean_hint)
+
         bracket_terms = re.findall(r"\[([^\]]+)\]", sample.target_prompt)
         terms.extend(term.strip() for term in bracket_terms if term.strip())
-
-        extras = sample.extras or {}
-        blended_words = extras.get("blended_words")
-        if blended_words:
-            try:
-                entries = json.loads(blended_words)
-                for entry in entries:
-                    if not isinstance(entry, str):
-                        continue
-                    parts = [part.strip() for part in entry.split(",")]
-                    if len(parts) == 2 and parts[1] and parts[1] != parts[0]:
-                        terms.append(parts[1])
-            except Exception:
-                pass
-
-        if not terms:
-            try:
-                edit_payload = json.loads(sample.edit_prompt)
-                if isinstance(edit_payload, dict):
-                    for key in edit_payload.keys():
-                        if key and isinstance(key, str):
-                            terms.append(key.strip("[] "))
-            except Exception:
-                pass
-
-        if not terms:
-            source_words = set(strip_prompt_markup(sample.source_prompt).split())
-            target_words = strip_prompt_markup(sample.target_prompt).split()
-            terms.extend([word for word in target_words if word not in source_words])
 
         deduped: list[str] = []
         for term in terms:
@@ -285,6 +370,9 @@ class V1Editor:
         return deduped
 
     def _build_focus_token_mask(self, target_condition: TextCondition, focus_terms: list[str]) -> torch.Tensor:
+        if not focus_terms:
+            return target_condition.token_mask
+
         tokenizer = self.pipe.tokenizer
         prompt_variants = [target_condition.prompt, strip_prompt_markup(target_condition.prompt)]
         focus_mask = torch.zeros_like(target_condition.token_mask, dtype=torch.bool)
@@ -337,31 +425,81 @@ class V1Editor:
         return aligned
 
     @torch.no_grad()
-    def _decode_latents(self, latents: torch.Tensor) -> np.ndarray:
+    def _decode_latents_batch(self, latents: torch.Tensor) -> list[np.ndarray]:
         scaled = latents / 0.18215
         image = self.pipe.vae.decode(scaled).sample
         image = (image / 2 + 0.5).clamp(0, 1)
-        image = image.cpu().permute(0, 2, 3, 1).numpy()[0]
-        return np.clip(image * 255.0, 0, 255).astype(np.uint8)
+        image = image.cpu().permute(0, 2, 3, 1).numpy()
+        image = np.clip(image * 255.0, 0, 255).astype(np.uint8)
+        return [image[index] for index in range(image.shape[0])]
+
+    @torch.no_grad()
+    def _decode_latents(self, latents: torch.Tensor) -> np.ndarray:
+        return self._decode_latents_batch(latents)[0]
 
     @staticmethod
     def _load_sample_image(path: Path) -> np.ndarray:
         return np.asarray(Image.open(path).convert("RGB")).copy()
 
     @staticmethod
-    def _save_aux_outputs(aux_history: list[dict[str, np.ndarray]], method_dir: Path) -> Path | None:
+    def _save_aux_outputs(
+        aux_history: list[dict[str, np.ndarray]],
+        method_dir: Path,
+        gt_mask: np.ndarray | None = None,
+    ) -> Path | None:
         if not aux_history:
             return None
+        aux_labels = tuple(
+            f"{index:02d}"
+            for index in np.linspace(0, len(aux_history) - 1, num=5, dtype=int).tolist()
+        )
+        map_shape: tuple[int, int] | None = None
+        for step_payload in aux_history:
+            for key in ("discrepancy", "attention", "latent_drift", "mask"):
+                if key in step_payload:
+                    map_shape = tuple(int(v) for v in step_payload[key].shape[:2])
+                    break
+            if map_shape is not None:
+                break
         images = []
-        for key in ("discrepancy", "attention", "latent_drift", "mask"):
+        for label, key in (
+            ("D_t", "discrepancy"),
+            ("A_t", "attention"),
+            ("C_t", "latent_drift"),
+            ("mask map", "mask"),
+        ):
             if any(key not in step for step in aux_history):
                 continue
-            summary = summarize_step_maps([step[key] for step in aux_history])
+            summary = summarize_step_maps(
+                [step[key] for step in aux_history],
+                labels=tuple(f"{label} {step_label}" for step_label in aux_labels),
+            )
             if summary is not None:
                 images.append(summary)
+        if gt_mask is not None:
+            gt_mask_array = gt_mask.astype(np.uint8)
+            if map_shape is not None and gt_mask_array.shape[:2] != map_shape:
+                gt_mask_resized = Image.fromarray(gt_mask_array * 255).resize(
+                    (map_shape[1], map_shape[0]),
+                    Image.Resampling.NEAREST,
+                )
+                gt_mask_array = (np.asarray(gt_mask_resized) > 127).astype(np.uint8)
+            gt_images = [mask_to_rgb(gt_mask_array) for _ in aux_labels]
+            gt_labels = [f"gt mask {step_label}" for step_label in aux_labels]
+            images.append(make_labeled_strip(gt_images, gt_labels))
         if not images:
             return None
-        merged = np.concatenate(images, axis=0)
+        target_width = max(image.shape[1] for image in images)
+        aligned_images: list[np.ndarray] = []
+        for image in images:
+            if image.shape[1] == target_width:
+                aligned_images.append(image)
+                continue
+            canvas = np.full((image.shape[0], target_width, 3), 255, dtype=np.uint8)
+            offset = (target_width - image.shape[1]) // 2
+            canvas[:, offset:offset + image.shape[1]] = image
+            aligned_images.append(canvas)
+        merged = np.concatenate(aligned_images, axis=0)
         aux_path = method_dir / "aux_summary.png"
         save_image(aux_path, merged)
         return aux_path
@@ -546,92 +684,29 @@ class V1Editor:
         save_json(debug_path, payload)
         return debug_path
 
-    def _run_single_method(
+    def _finalize_method_result(
         self,
         sample: MaterializedSample,
         method_name: str,
+        edited_image: np.ndarray,
+        aux_history: list[dict[str, np.ndarray]],
+        trace_rows: list[dict[str, float | int]],
         inversion: InversionOutput,
-        target_condition: TextCondition,
     ) -> MethodResult:
-        self._set_timesteps()
-        latents = inversion.zt_src.detach().clone().to(self.pipe.device, dtype=self.pipe.unet.dtype)
-        source_latents = [
-            latent.to(self.pipe.device, dtype=self.pipe.unet.dtype)
-            for latent in inversion.src_latents
-        ]
-        source_latents = self._resample_source_latents(source_latents, len(self.pipe.scheduler.timesteps))
-        builder = DynamicMaskBuilder(self.config.mask, method_name)
-        builder.reset()
         focus_terms = self._extract_focus_terms(sample)
-        focus_mask = self._build_focus_token_mask(target_condition, focus_terms)
-
-        aux_history: list[dict[str, np.ndarray]] = []
-        mask_history: list[np.ndarray] = []
-        trace_rows: list[dict[str, float | int]] = []
         method_dir = sample.sample_dir / method_name
         method_dir.mkdir(parents=True, exist_ok=True)
-
-        for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
-            source_latent = source_latents[step_idx]
-            self.attention_store.reset()
-            eps_src = self.source_predictor.predict(latents, timestep)
-            self.attention_store.reset()
-            eps_tar, target_stats = self.target_predictor.predict(latents, timestep, target_condition)
-            timestep_value = int(timestep.item()) if hasattr(timestep, "item") else int(timestep)
-            delta = float(target_stats["delta"])
-            print(f"[{sample.sample_id}][{method_name}] {step_idx} {timestep_value} {delta:.6f}")
-            attention_map = aggregate_step_cross_attention(
-                self.attention_store,
-                focus_mask,
-                target_hw=(latents.shape[-2], latents.shape[-1]),
-                locations=self.config.mask.attention_locations,
-            )
-
-            if method_name == "target_only":
-                mask = torch.ones_like(eps_src[:, :1])
-                aux_tensor = {"mask": mask}
-                eps = eps_tar
-            else:
-                mask, aux_tensor = builder.build(eps_src, eps_tar, latents, source_latent, attention_map)
-                eps = eps_src + mask * (eps_tar - eps_src)
-
-            src_tar_gap = float(torch.abs(eps_tar - eps_src).mean().item())
-            applied_gap = float(torch.abs(eps - eps_src).mean().item())
-            blend_strength = applied_gap / src_tar_gap if src_tar_gap > 1e-8 else 0.0
-            trace_rows.append(
-                {
-                    "step_idx": step_idx,
-                    "timestep": timestep_value,
-                    "delta": delta,
-                    "src_tar_gap": src_tar_gap,
-                    "applied_gap": applied_gap,
-                    "blend_strength": float(blend_strength),
-                }
-            )
-
-            scheduler_output = self.pipe.scheduler.step(eps, timestep, latents)
-            latents = scheduler_output.prev_sample
-
-            aux_numpy = {
-                key: value.detach().float().cpu().numpy()[0, 0]
-                for key, value in aux_tensor.items()
-            }
-            if "mask" not in aux_numpy:
-                aux_numpy["mask"] = mask.detach().float().cpu().numpy()[0, 0]
-            aux_history.append(aux_numpy)
-            mask_history.append(aux_numpy["mask"])
-
-        edited_image = self._decode_latents(latents)
         edited_path = method_dir / "edited.png"
         save_image(edited_path, edited_image)
 
         mask_summary_path = None
+        mask_history = [step["mask"] for step in aux_history if "mask" in step]
         mask_summary = summarize_step_maps(mask_history)
         if mask_summary is not None:
             mask_summary_path = method_dir / "mask_summary.png"
             save_image(mask_summary_path, mask_summary)
 
-        aux_summary_path = self._save_aux_outputs(aux_history, method_dir)
+        aux_summary_path = self._save_aux_outputs(aux_history, method_dir, sample.gt_mask)
         self._save_selected_step_outputs(aux_history, method_dir)
         delta_trace_path = self._write_delta_trace(method_dir, trace_rows)
         diagnostics_csv_path, diagnostics_json_path, diagnostics_summary = self._write_step_diagnostics(
@@ -648,12 +723,11 @@ class V1Editor:
             trace_rows,
             diagnostics_summary=diagnostics_summary,
             runtime=self.config.runtime,
-            source_latent_count=len(source_latents),
+            source_latent_count=len(aux_history),
         )
         debug_payload = json.loads(debug_json_path.read_text(encoding="utf-8"))
         debug_payload["focus_terms"] = focus_terms
         save_json(debug_json_path, debug_payload)
-        clear_cuda_memory()
 
         return MethodResult(
             method_name=method_name,
@@ -666,6 +740,133 @@ class V1Editor:
             diagnostics_json_path=diagnostics_json_path,
             debug_json_path=debug_json_path,
         )
+
+    def _run_method_batch(
+        self,
+        samples: list[MaterializedSample],
+        method_name: str,
+        inversions: list[InversionOutput],
+        target_conditions: list[TextCondition],
+    ) -> list[MethodResult]:
+        self._set_timesteps()
+        self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
+
+        batch_size = len(samples)
+        latents = torch.cat(
+            [inversion.zt_src.detach().clone().to(self.pipe.device, dtype=self.pipe.unet.dtype) for inversion in inversions],
+            dim=0,
+        )
+        source_latent_sequences = [
+            self._resample_source_latents(
+                [latent.to(self.pipe.device, dtype=self.pipe.unet.dtype) for latent in inversion.src_latents],
+                len(self.pipe.scheduler.timesteps),
+            )
+            for inversion in inversions
+        ]
+        source_latents = [
+            torch.cat([sequence[step_idx] for sequence in source_latent_sequences], dim=0)
+            for step_idx in range(len(self.pipe.scheduler.timesteps))
+        ]
+        builder = DynamicMaskBuilder(self.config.mask, method_name)
+        builder.reset()
+
+        focus_masks = torch.cat(
+            [
+                self._build_focus_token_mask(condition, self._extract_focus_terms(sample)).to(self.pipe.device)
+                for sample, condition in zip(samples, target_conditions)
+            ],
+            dim=0,
+        )
+        target_embeddings = torch.cat(
+            [condition.embeddings.to(self.pipe.device, dtype=self.pipe.unet.dtype) for condition in target_conditions],
+            dim=0,
+        )
+
+        aux_histories: list[list[dict[str, np.ndarray]]] = [[] for _ in range(batch_size)]
+        trace_histories: list[list[dict[str, float | int]]] = [[] for _ in range(batch_size)]
+
+        for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
+            source_latent = source_latents[step_idx]
+            self.attention_store.reset()
+            eps_src = self.source_predictor.predict(latents, timestep)
+            self.attention_store.reset()
+            eps_tar, target_noise, _noise_uncond, target_stats = self.target_predictor.predict(latents, timestep, target_embeddings)
+            timestep_value = int(timestep.item()) if hasattr(timestep, "item") else int(timestep)
+            attention_map = aggregate_step_cross_attention(
+                self.attention_store,
+                focus_masks,
+                target_hw=(latents.shape[-2], latents.shape[-1]),
+                locations=self.config.mask.attention_locations,
+            )
+
+            if method_name == "target_only":
+                mask = torch.ones_like(eps_src[:, :1])
+                aux_tensor = {"mask": mask}
+                eps = eps_tar
+            else:
+                mask, aux_tensor = builder.build(eps_src, target_noise, latents, source_latent, attention_map)
+                eps = eps_src + mask * (eps_tar - eps_src)
+
+            delta_values = target_stats.get("delta_per_sample", [])
+            mean_delta = float(np.mean(delta_values)) if delta_values else float(target_stats["delta"])
+            sample_ids = ",".join(sample.sample_id for sample in samples)
+            print(f"[{method_name}][batch={batch_size}][{sample_ids}] {step_idx} {timestep_value} {mean_delta:.6f}")
+
+            discrepancy_gap = torch.abs(target_noise - eps_src).flatten(1).mean(dim=1)
+            src_tar_gap = torch.abs(eps_tar - eps_src).flatten(1).mean(dim=1)
+            applied_gap = torch.abs(eps - eps_src).flatten(1).mean(dim=1)
+            blend_strength = torch.where(src_tar_gap > 1e-8, applied_gap / src_tar_gap, torch.zeros_like(applied_gap))
+
+            scheduler_output = self.pipe.scheduler.step(eps, timestep, latents)
+            latents = scheduler_output.prev_sample
+
+            for sample_idx in range(batch_size):
+                delta = float(delta_values[sample_idx]) if sample_idx < len(delta_values) else float(target_stats["delta"])
+                trace_histories[sample_idx].append(
+                    {
+                        "step_idx": step_idx,
+                        "timestep": timestep_value,
+                        "delta": delta,
+                        "discrepancy_gap": float(discrepancy_gap[sample_idx].item()),
+                        "src_tar_gap": float(src_tar_gap[sample_idx].item()),
+                        "applied_gap": float(applied_gap[sample_idx].item()),
+                        "blend_strength": float(blend_strength[sample_idx].item()),
+                    }
+                )
+                aux_numpy = {
+                    key: value[sample_idx, 0].detach().float().cpu().numpy()
+                    for key, value in aux_tensor.items()
+                }
+                if "mask" not in aux_numpy:
+                    aux_numpy["mask"] = mask[sample_idx, 0].detach().float().cpu().numpy()
+                aux_histories[sample_idx].append(aux_numpy)
+
+        edited_images = self._decode_latents_batch(latents)
+        results: list[MethodResult] = []
+        for sample_idx, sample in enumerate(samples):
+            results.append(
+                self._finalize_method_result(
+                    sample=sample,
+                    method_name=method_name,
+                    edited_image=edited_images[sample_idx],
+                    aux_history=aux_histories[sample_idx],
+                    trace_rows=trace_histories[sample_idx],
+                    inversion=inversions[sample_idx],
+                )
+            )
+
+        if self.config.runtime.clear_cuda_cache_between_methods:
+            clear_cuda_memory()
+        return results
+
+    def _run_single_method(
+        self,
+        sample: MaterializedSample,
+        method_name: str,
+        inversion: InversionOutput,
+        target_condition: TextCondition,
+    ) -> MethodResult:
+        return self._run_method_batch([sample], method_name, [inversion], [target_condition])[0]
 
     def visualize_attention_only(self, sample: MaterializedSample, output_dir: Path) -> Path:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -684,7 +885,7 @@ class V1Editor:
 
         for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
             self.attention_store.reset()
-            eps_tar, target_stats = self.target_predictor.predict(latents, timestep, target_condition)
+            eps_tar, _, _, target_stats = self.target_predictor.predict(latents, timestep, target_condition.embeddings)
             timestep_value = int(timestep.item()) if hasattr(timestep, "item") else int(timestep)
             delta = float(target_stats["delta"])
             print(f"[attention_only][{sample.sample_id}] {step_idx} {timestep_value} {delta:.6f}")
@@ -694,7 +895,7 @@ class V1Editor:
                 target_hw=(latents.shape[-2], latents.shape[-1]),
                 locations=self.config.mask.attention_locations,
             )
-            attention_np = attention_map.detach().float().cpu().numpy()[0]
+            attention_np = attention_map.detach().float().cpu().numpy()[0, 0]
             attention_history.append(attention_np)
             trace_rows.append({"step_idx": step_idx, "timestep": timestep_value, "delta": delta})
             latents = self.pipe.scheduler.step(eps_tar, timestep, latents).prev_sample
@@ -730,18 +931,88 @@ class V1Editor:
         return overview_path
 
     def run_sample(self, sample: MaterializedSample) -> tuple[InversionOutput, list[MethodResult]]:
-        source_image = self._load_sample_image(sample.source_image_path)
-        inversion = self.inversion_backend.invert(source_image)
-        self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
-        save_image(sample.sample_dir / "source_reconstruction.png", inversion.reconstruction_image)
-        save_json(sample.sample_dir / "inversion.json", inversion.metadata)
-        if self.config.save_inversion_tensors:
-            torch.save(inversion.zt_src.detach().cpu(), sample.sample_dir / "zt_src.pt")
-            torch.save([latent.detach().cpu() for latent in inversion.src_latents], sample.sample_dir / "src_latents.pt")
+        return self.run_samples([sample])[sample.sample_id]
 
-        target_condition = self.prompt_encoder.encode(sample.target_prompt)
-        method_results = [
-            self._run_single_method(sample, method_name, inversion, target_condition)
-            for method_name in self.config.methods
-        ]
-        return inversion, method_results
+    def run_samples(self, samples: list[MaterializedSample]) -> dict[str, tuple[InversionOutput, list[MethodResult]]]:
+        if not samples:
+            return {}
+
+        prepared: list[tuple[MaterializedSample, InversionOutput, TextCondition]] = []
+        for sample in samples:
+            source_image = self._load_sample_image(sample.source_image_path)
+            inversion = self.inversion_backend.invert(source_image)
+            save_image(sample.sample_dir / "source_reconstruction.png", inversion.reconstruction_image)
+            save_json(sample.sample_dir / "inversion.json", inversion.metadata)
+            if self.config.save_inversion_tensors:
+                torch.save(inversion.zt_src.detach().cpu(), sample.sample_dir / "zt_src.pt")
+                torch.save([latent.detach().cpu() for latent in inversion.src_latents], sample.sample_dir / "src_latents.pt")
+            target_condition = self.prompt_encoder.encode(sample.target_prompt)
+            prepared.append((sample, inversion, target_condition))
+
+        results: dict[str, tuple[InversionOutput, list[MethodResult]]] = {
+            sample.sample_id: (inversion, [])
+            for sample, inversion, _target_condition in prepared
+        }
+        batch_size = max(1, int(self.config.runtime.sample_batch_size))
+        min_batch_size = max(1, min(int(self.config.runtime.min_sample_batch_size), batch_size))
+        auto_batch_fallback = bool(self.config.runtime.auto_batch_fallback) and batch_size > min_batch_size
+        active_batch_size = batch_size
+        probe_method = self._select_probe_method()
+        if (
+            probe_method is not None
+            and bool(self.config.runtime.batch_warmup_probe)
+            and len(prepared) > 1
+            and active_batch_size > 1
+        ):
+            probe_batch_size = min(active_batch_size, len(prepared))
+            while True:
+                probe_batch = prepared[:probe_batch_size]
+                probe_samples = [sample for sample, _inversion, _condition in probe_batch]
+                probe_inversions = [inversion for _sample, inversion, _condition in probe_batch]
+                probe_conditions = [condition for _sample, _inversion, condition in probe_batch]
+                try:
+                    print(
+                        f"[warmup-batch-probe][{probe_method}] probing batch={probe_batch_size} "
+                        f"on {','.join(sample.sample_id for sample in probe_samples)}"
+                    )
+                    self._probe_method_batch_memory(probe_samples, probe_inversions, probe_conditions, probe_method)
+                    print(f"[warmup-batch-probe][{probe_method}] batch={probe_batch_size} passed")
+                    break
+                except RuntimeError as exc:
+                    if not auto_batch_fallback or not self._is_cuda_oom_error(exc) or probe_batch_size <= min_batch_size:
+                        raise
+                    next_batch_size = self._next_batch_size(probe_batch_size, min_batch_size)
+                    print(
+                        f"[warmup-batch-probe][{probe_method}] CUDA OOM at batch={probe_batch_size}; "
+                        f"retrying with batch={next_batch_size}"
+                    )
+                    active_batch_size = next_batch_size
+                    probe_batch_size = next_batch_size
+            active_batch_size = min(active_batch_size, probe_batch_size)
+            print(f"[warmup-batch-probe] using sample_batch_size={active_batch_size} for full run")
+        for method_name in self.config.methods:
+            start = 0
+            while start < len(prepared):
+                current_batch_size = min(active_batch_size, len(prepared) - start)
+                batch = prepared[start:start + current_batch_size]
+                batch_samples = [sample for sample, _inversion, _condition in batch]
+                batch_inversions = [inversion for _sample, inversion, _condition in batch]
+                batch_conditions = [condition for _sample, _inversion, condition in batch]
+                try:
+                    batch_method_results = self._run_method_batch(batch_samples, method_name, batch_inversions, batch_conditions)
+                except RuntimeError as exc:
+                    if not auto_batch_fallback or not self._is_cuda_oom_error(exc) or current_batch_size <= min_batch_size:
+                        raise
+                    next_batch_size = self._next_batch_size(current_batch_size, min_batch_size)
+                    failed_ids = ",".join(sample.sample_id for sample in batch_samples)
+                    print(
+                        f"[auto-batch-fallback][{method_name}] CUDA OOM at batch={current_batch_size} "
+                        f"for {failed_ids}; retrying with batch={next_batch_size}"
+                    )
+                    active_batch_size = next_batch_size
+                    clear_cuda_memory()
+                    continue
+                for sample, method_result in zip(batch_samples, batch_method_results):
+                    results[sample.sample_id][1].append(method_result)
+                start += current_batch_size
+        return results

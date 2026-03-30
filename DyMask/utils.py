@@ -138,10 +138,11 @@ def make_labeled_strip(images: list[np.ndarray], labels: list[str]) -> np.ndarra
     return np.asarray(strip)
 
 
-def summarize_step_maps(step_maps: list[np.ndarray], labels: tuple[str, str, str] = ("early", "mid", "late")) -> np.ndarray | None:
+def summarize_step_maps(step_maps: list[np.ndarray], labels: tuple[str, ...] = ("early", "mid", "late")) -> np.ndarray | None:
     if not step_maps:
         return None
-    indices = [0, len(step_maps) // 2, len(step_maps) - 1]
+    sample_count = max(1, len(labels))
+    indices = np.linspace(0, len(step_maps) - 1, num=sample_count, dtype=int).tolist()
     images = [mask_to_rgb(step_maps[index]) for index in indices]
     return make_labeled_strip(images, list(labels))
 

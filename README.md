@@ -7,8 +7,8 @@ DyMask is an image editing experiment system built around:
 
 - Stable Diffusion 1.5
 - Null-Text Inversion
-- Dynamic mask based blending
-- Prompt-conditioned attention analysis
+- Trajectory-guided dynamic mask blending
+- Target-prompt attention prior analysis
 
 The main entry points are under [DyMask](D:/Program/dymask/DyMask).
 
@@ -136,11 +136,11 @@ python DyMask/run_v1.py --num-inversion-steps 10 --num-edit-steps 20
 - `custom`
   explicit `--methods`
 
-### Common Five-Method Setup
-If you want the common five-method comparison, use:
+### Common Six-Method Setup
+If you want the common six-method comparison, use:
 
 ```powershell
-python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask
+python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask
 ```
 
 Method display names:
@@ -148,22 +148,23 @@ Method display names:
 - `global_blend` -> `global blend`
 - `discrepancy_only` -> `D_t`
 - `discrepancy_attention` -> `D_t + A_t`
+- `discrepancy_latent` -> `D_t - C_t`
 - `full_dynamic_mask` -> `Full`
 
 ## Common Commands
 ### Run 8 samples on the default parquet
 ```powershell
-python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask --sample-count 8 --run-limit 8
+python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask --sample-count 8 --run-limit 8
 ```
 
 ### Run 8 samples on `V1-00000-of-00001.parquet`
 ```powershell
-python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask --parquet-path assets/data/V1-00000-of-00001.parquet --sample-count 8 --run-limit 8
+python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask --parquet-path assets/data/V1-00000-of-00001.parquet --sample-count 8 --run-limit 8
 ```
 
 ### Run selected rows only
 ```powershell
-python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --row-indices 6 26 28 --run-limit 3 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask
+python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --row-indices 6 26 28 --run-limit 3 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask
 ```
 
 ### Minimal single-sample validation
@@ -183,7 +184,7 @@ python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --s
 
 ### Skip metrics
 ```powershell
-python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask --skip-metrics
+python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask --skip-metrics
 ```
 
 ### Static mask
@@ -193,7 +194,7 @@ python DyMask/run_v1.py --phase phase4 --mask-mode static
 
 ### Re-run from an existing `sample.json`
 ```powershell
-python DyMask/run_v1.py --sample-json runs/dymask_v1/<run_dir>/samples/<sample_id>/sample.json --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask
+python DyMask/run_v1.py --sample-json runs/dymask_v1/<run_dir>/samples/<sample_id>/sample.json --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask
 ```
 
 ## visualize_attention.py
@@ -242,7 +243,7 @@ It refreshes:
 Note:
 - this script backfills the generic metrics tables
 - it does not rebuild sample overviews
-- it does not rebuild the five-method-only summary tables
+- it does not rebuild the overview-method comparison tables
 
 ## inspect_pt.py
 Inspect saved tensors:
@@ -263,9 +264,9 @@ runs/dymask_v1/<run_dir>/
   metrics_case_level.csv
   metrics_summary.csv
   metrics_summary.json
-  metrics_five_methods_case_level.csv
-  metrics_five_methods_summary.csv
-  metrics_five_methods_summary.json
+  metrics_overview_methods_case_level.csv
+  metrics_overview_methods_summary.csv
+  metrics_overview_methods_summary.json
   samples/
     <sample_id>/
       sample.json
@@ -287,16 +288,39 @@ runs/dymask_v1/<run_dir>/
 
 `target_reference.png` exists only when the dataset actually provides a target edited image.
 
+Each generated `sample.json` now separates required inputs from optional metadata:
+
+```text
+sample.json
+  sample_id
+  row_index
+  record_id or key
+  core_input
+    source_image_path
+    target_prompt
+    target_token_hints
+  metadata
+    source_prompt
+    edit_prompt
+    blended_word
+    extras
+    has_gt_mask
+  target_reference_path
+```
+
+Inference is designed around `core_input`. Metadata is kept for analysis, logging, evaluation, and optional token hints.
+
 ## overview.png
-Each sample `overview.png` currently contains 7 tiles:
+Each sample `overview.png` currently contains 8 tiles:
 
 1. source
 2. target-only
 3. global blend
 4. D_t
 5. D_t + A_t
-6. Full
-7. D/A/C/mask maps
+6. D_t - C_t
+7. Full
+8. D/A/C/mask maps
 
 ## Metrics Notes
 Common fields:
@@ -352,17 +376,17 @@ Heuristic:
 ## Suggested Workflow
 ### 1. Quick sanity check
 ```powershell
-python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --row-indices 6 --sample-count 1 --run-limit 1 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask --skip-metrics
+python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --row-indices 6 --sample-count 1 --run-limit 1 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask --skip-metrics
 ```
 
 ### 2. Run 8 samples
 ```powershell
-python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --sample-count 8 --run-limit 8 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask
+python DyMask/run_v1.py --parquet-path assets/data/V1-00000-of-00001.parquet --sample-count 8 --run-limit 8 --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask
 ```
 
 ### 3. Inspect outputs
 - first check `samples/<sample_id>/overview.png`
-- then read `metrics_five_methods_summary.csv`
+- then read `metrics_overview_methods_summary.csv`
 - then inspect `step_diagnostics.json` if the visual gap is small
 
 ### 4. Probe attention if needed
@@ -375,13 +399,13 @@ python DyMask/visualize_attention.py --parquet-path assets/data/V1-00000-of-0000
 - add `--allow-download` only if downloading is intended
 - if VRAM is tight, do not launch multiple runs at the same time
 - `phase2` expands to `global_blend_0.3/0.5/0.7`, not a single `global_blend`
-- for the fixed five-method comparison, use:
+- for the fixed six-method comparison, use:
 
 ```powershell
---phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask
+--phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask
 ```
 
 ## Default Template
 ```powershell
-python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention full_dynamic_mask --parquet-path <your.parquet> --sample-count 8 --run-limit 8 --num-inversion-steps 10 --num-edit-steps 10
+python DyMask/run_v1.py --phase custom --methods target_only global_blend discrepancy_only discrepancy_attention discrepancy_latent full_dynamic_mask --parquet-path <your.parquet> --sample-count 8 --run-limit 8 --num-inversion-steps 10 --num-edit-steps 10
 ```
