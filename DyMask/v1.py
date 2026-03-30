@@ -252,13 +252,13 @@ class DynamicMaskBuilder:
 
 
 class V1Editor:
-    def __init__(self, pipe, config: ExperimentConfig) -> None:
+    def __init__(self, pipe, config: ExperimentConfig, inversion_backend=None) -> None:
         self.pipe = pipe
         self.config = config
         self.ntip2p = load_ntip2p_module()
         configure_ntip2p_module(self.ntip2p, pipe, config.runtime)
         self.prompt_encoder = PromptEncoder(pipe)
-        self.inversion_backend = DDIMInversionBackend(pipe, config.runtime)
+        self.inversion_backend = inversion_backend if inversion_backend is not None else DDIMInversionBackend(pipe, config.runtime)
         self.source_predictor = EmptyPromptSourcePredictor(pipe, self.prompt_encoder)
         self.target_predictor = TargetPromptPredictor(pipe, self.prompt_encoder, config.runtime.guidance_scale)
         self.attention_store = self.ntip2p.AttentionStore()
@@ -940,7 +940,10 @@ class V1Editor:
         prepared: list[tuple[MaterializedSample, InversionOutput, TextCondition]] = []
         for sample in samples:
             source_image = self._load_sample_image(sample.source_image_path)
-            inversion = self.inversion_backend.invert(source_image)
+            try:
+                inversion = self.inversion_backend.invert(source_image, source_prompt=sample.source_prompt)
+            except TypeError:
+                inversion = self.inversion_backend.invert(source_image)
             save_image(sample.sample_dir / "source_reconstruction.png", inversion.reconstruction_image)
             save_json(sample.sample_dir / "inversion.json", inversion.metadata)
             if self.config.save_inversion_tensors:

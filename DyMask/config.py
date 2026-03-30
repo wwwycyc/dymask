@@ -9,6 +9,7 @@ from typing import Any
 class RuntimeConfig:
     model_id: str = "runwayml/stable-diffusion-v1-5"
     clip_model_id: str = "openai/clip-vit-large-patch14"
+    inversion_backend: str = "ddim"
     device: str = "cuda"
     dtype: str = "float16"
     image_size: int = 512
@@ -19,6 +20,8 @@ class RuntimeConfig:
     attention_slicing: bool = True
     vae_slicing: bool = True
     enable_cpu_offload: bool = False
+    nti_num_inner_steps: int = 10
+    nti_early_stop_epsilon: float = 1e-5
     sample_batch_size: int = 1
     min_sample_batch_size: int = 1
     auto_batch_fallback: bool = True

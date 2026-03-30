@@ -17,6 +17,7 @@ from DyMask.config import ExperimentConfig
 from DyMask.data import MagicBrushParquetDataset, PIEBenchDataset
 from DyMask.logging_utils import MarkdownExperimentLogger
 from DyMask.metrics import MetricRunner
+from DyMask.nti_inversion import NTIInversionBackend
 from DyMask.schemas import MaterializedSample, SampleCoreInput, SampleManifestEntry, SampleMetadata
 from DyMask.utils import compose_labeled_overview, make_timestamped_run_dir, save_csv_records, save_image, save_json
 from DyMask.v1 import V1Editor
@@ -62,11 +63,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-limit", type=int, default=1)
     parser.add_argument("--model-id", default="runwayml/stable-diffusion-v1-5")
     parser.add_argument("--clip-model-id", default="openai/clip-vit-large-patch14")
+    parser.add_argument("--inversion-backend", choices=["ddim", "nti"], default="ddim")
     parser.add_argument("--image-size", type=int, default=512)
     parser.add_argument("--num-ddim-steps", type=int, default=10, help="Legacy alias: sets both inversion and edit steps unless overridden.")
     parser.add_argument("--num-inversion-steps", type=int, default=None)
     parser.add_argument("--num-edit-steps", type=int, default=None)
     parser.add_argument("--guidance-scale", type=float, default=7.5)
+    parser.add_argument("--nti-num-inner-steps", type=int, default=10)
+    parser.add_argument("--nti-early-stop-epsilon", type=float, default=1e-5)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--dtype", default="float16")
     parser.add_argument("--sample-batch-size", type=int, default=1, help="Number of samples to edit together per method on one GPU.")
@@ -137,10 +141,13 @@ def build_config(args: argparse.Namespace) -> ExperimentConfig:
     config.sampling.run_limit = args.run_limit
     config.runtime.model_id = args.model_id
     config.runtime.clip_model_id = args.clip_model_id
+    config.runtime.inversion_backend = args.inversion_backend
     config.runtime.image_size = args.image_size
     config.runtime.num_inversion_steps = args.num_inversion_steps if args.num_inversion_steps is not None else legacy_steps
     config.runtime.num_edit_steps = args.num_edit_steps if args.num_edit_steps is not None else legacy_steps
     config.runtime.guidance_scale = args.guidance_scale
+    config.runtime.nti_num_inner_steps = max(1, int(args.nti_num_inner_steps))
+    config.runtime.nti_early_stop_epsilon = float(args.nti_early_stop_epsilon)
     config.runtime.device = args.device
     config.runtime.dtype = args.dtype
     config.runtime.sample_batch_size = max(1, int(args.sample_batch_size))
@@ -397,8 +404,8 @@ def write_overview_method_metric_tables(
     return case_table_path, summary_table_path
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
     config = build_config(args)
     run_dir = make_timestamped_run_dir(config.sampling.output_root, prefix=config.phase if config.phase != "custom" else "v1")
     logger = MarkdownExperimentLogger(Path("log.md"))
@@ -487,7 +494,10 @@ def main() -> None:
         return
 
     pipe = build_stable_diffusion_pipeline(config.runtime)
-    editor = V1Editor(pipe, config)
+    inversion_backend = None
+    if config.runtime.inversion_backend == "nti":
+        inversion_backend = NTIInversionBackend(pipe, config.runtime)
+    editor = V1Editor(pipe, config, inversion_backend=inversion_backend)
     metric_runner = None if config.skip_metrics else MetricRunner(config.runtime, config.metrics)
 
     overview_methods = resolve_overview_methods(config.methods)
