@@ -248,9 +248,51 @@ Examples:
 - Any deviation from the above must be marked as appendix / ablation
 
 
-## 9. Current Code Mapping
+## 9. Batch Execution Policy
+
+To improve GPU utilization, multi-sample batching is allowed only when batching does not change the intended method semantics.
+
+### 9.1 Ours
+
+- Multi-sample batching is allowed
+- Use `--sample-batch-size` when GPU memory allows
+- Inversion remains per sample
+- The edit stage may run multiple samples together
+
+### 9.2 DiffEdit
+
+- Multi-sample batching is allowed
+- Use `--sample-batch-size` when GPU memory allows
+- Inversion remains per sample
+- Mask generation and masked denoising may run multiple samples together
+
+### 9.3 Prompt-to-Prompt
+
+- Do **not** use multi-sample batching in the main protocol
+- Keep Prompt-to-Prompt as single-sample execution
+
+Reason:
+
+- Original Prompt-to-Prompt batching is based on prompt groups that share the same latent/image context
+- This is not equivalent to ordinary batching of multiple independent images
+- A custom multi-image grouped implementation would be an engineering extension, not a strict baseline reproduction
+
+Therefore:
+
+- `Ours`: batch allowed
+- `DiffEdit`: batch allowed
+- `P2P`: single-sample only in the main table
+
+### 9.4 Reporting Requirement
+
+If any method uses a nonstandard batched implementation beyond the rules above, it must be explicitly marked as:
+
+- engineering extension
+- not strict baseline reproduction
+
+
+## 10. Current Code Mapping
 
 - Ours: `DyMask/run_v1_source_prompt.py`
 - DiffEdit baseline: `DyMask/run_diffedit.py`
 - P2P baseline: `DyMask/run_p2p.py`
-

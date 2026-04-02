@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv_list)
     if not _has_output_root_arg(argv_list):
-        args.output_root = "runs/diffedit"
+        args.output_root = str(Path(__file__).resolve().parents[1] / "samples" / "diffedit_runs")
 
     config = build_config(args)
     config.methods = ("diffedit",)
@@ -90,7 +90,7 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     run_dir = make_timestamped_run_dir(Path(args.output_root), prefix="diffedit")
-    logger = MarkdownExperimentLogger(Path("log.md"))
+    logger = MarkdownExperimentLogger(run_dir / "log.md")
     save_json(
         run_dir / "variant.json",
         {
