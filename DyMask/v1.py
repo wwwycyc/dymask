@@ -258,11 +258,10 @@ class DynamicMaskBuilder:
                 - self.mask_config.latent_weight * latent_drift
             )
         else:
-            latent_penalty = (1.0 - attention_map) * latent_drift
             raw_mask = (
                 self.mask_config.discrepancy_weight * discrepancy
                 + self.mask_config.attention_weight * attention_map
-                - self.mask_config.latent_weight * latent_penalty
+                - self.mask_config.latent_weight * latent_drift
             )
 
         if self.mask_config.smoothing_kernel > 1:

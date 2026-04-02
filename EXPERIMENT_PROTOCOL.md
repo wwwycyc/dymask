@@ -265,6 +265,7 @@ To improve GPU utilization, multi-sample batching is allowed only when batching 
 - Use `--sample-batch-size` when GPU memory allows
 - Inversion remains per sample
 - Mask generation and masked denoising may run multiple samples together
+- Current code supports batched DiffEdit execution in `DyMask/run_diffedit.py`
 
 ### 9.3 Prompt-to-Prompt
 
@@ -289,6 +290,16 @@ If any method uses a nonstandard batched implementation beyond the rules above, 
 
 - engineering extension
 - not strict baseline reproduction
+
+### 9.5 Practical Recommendation
+
+Recommended execution policy for the main experiments:
+
+- `Ours`: enable batching when memory allows
+- `DiffEdit`: enable batching when memory allows
+- `P2P`: keep single-sample execution
+
+This gives higher GPU utilization while preserving the intended baseline semantics.
 
 
 ## 10. Current Code Mapping

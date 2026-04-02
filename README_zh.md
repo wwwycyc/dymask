@@ -178,9 +178,9 @@ python DyMask/run_v1.py --phase custom --methods target_only global_blend discre
 - `discrepancy_only`: `raw = D_t`
 - `discrepancy_attention`: `raw = w_d * D_t + w_a * A_t`
 - `discrepancy_latent`: `raw = w_d * D_t - w_c * C_t`
-- `full_dynamic_mask`: `raw = w_d * D_t + w_a * A_t - w_c * (1 - A_t) * C_t`
+- `full_dynamic_mask`: `raw = w_d * D_t + w_a * A_t - w_c * C_t`
 
-其中 `full_dynamic_mask` 现在对 `C_t` 使用 attention-gated 惩罚：高注意力区域保留更强的编辑自由度，低注意力区域会受到更强的 `C_t` 抑制。
+其中 `full_dynamic_mask` 现在直接使用 `C_t`，不再额外乘 gating 项。
 
 ## 11. 常用启动命令
 ### 11.1 在默认 parquet 上跑 8 个样本

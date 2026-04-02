@@ -155,9 +155,9 @@ Current raw-mask formulas:
 - `discrepancy_only`: `raw = D_t`
 - `discrepancy_attention`: `raw = w_d * D_t + w_a * A_t`
 - `discrepancy_latent`: `raw = w_d * D_t - w_c * C_t`
-- `full_dynamic_mask`: `raw = w_d * D_t + w_a * A_t - w_c * (1 - A_t) * C_t`
+- `full_dynamic_mask`: `raw = w_d * D_t + w_a * A_t - w_c * C_t`
 
-For `full_dynamic_mask`, the latent-drift penalty is now attention-gated, so high-attention regions keep more editing freedom while low-attention regions receive a stronger `C_t` penalty.
+For `full_dynamic_mask`, `C_t` is now applied directly without an extra gating term.
 
 ## Common Commands
 ### Run 8 samples on the default parquet
