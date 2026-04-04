@@ -194,6 +194,10 @@ class DynamicMaskBuilder:
     def reset(self) -> None:
         self._static_mask = None
 
+    def latent_weight_for_step(self, step_idx: int | None = None, total_steps: int | None = None) -> float:
+        gamma_max = float(self.mask_config.latent_weight)
+        return gamma_max
+
     def _compute_aux_maps(
         self,
         reference_noise: torch.Tensor,
@@ -227,11 +231,14 @@ class DynamicMaskBuilder:
         latents: torch.Tensor,
         source_latent: torch.Tensor,
         attention_map: torch.Tensor,
+        step_idx: int | None = None,
+        total_steps: int | None = None,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         aux = self._compute_aux_maps(reference_noise, target_noise, latents, source_latent, attention_map)
         discrepancy = aux["discrepancy"]
         attention_map = aux["attention"]
         latent_drift = aux["latent_drift"]
+        latent_weight = self.latent_weight_for_step(step_idx=step_idx, total_steps=total_steps)
 
         if self.variant.startswith("global_blend"):
             blend_alpha = self.mask_config.global_blend_alpha
@@ -255,13 +262,13 @@ class DynamicMaskBuilder:
         elif self.variant == "discrepancy_latent":
             raw_mask = (
                 self.mask_config.discrepancy_weight * discrepancy
-                - self.mask_config.latent_weight * latent_drift
+                - latent_weight * latent_drift
             )
         else:
             raw_mask = (
                 self.mask_config.discrepancy_weight * discrepancy
                 + self.mask_config.attention_weight * attention_map
-                - self.mask_config.latent_weight * latent_drift
+                - latent_weight * latent_drift
             )
 
         if self.mask_config.smoothing_kernel > 1:
@@ -361,6 +368,7 @@ class V1Editor:
             dim=0,
         )
         timestep = self.pipe.scheduler.timesteps[0]
+        total_steps = len(self.pipe.scheduler.timesteps)
         try:
             self.attention_store.reset()
             eps_src = self.source_predictor.predict(latents, timestep)
@@ -375,7 +383,15 @@ class V1Editor:
             if method_name == "target_only":
                 eps = eps_tar
             else:
-                mask, _aux_tensor = builder.build(eps_src, target_noise, latents, source_latents, attention_map)
+                mask, _aux_tensor = builder.build(
+                    eps_src,
+                    target_noise,
+                    latents,
+                    source_latents,
+                    attention_map,
+                    step_idx=0,
+                    total_steps=total_steps,
+                )
                 eps = eps_src + mask * (eps_tar - eps_src)
             probe_latents = self.pipe.scheduler.step(eps, timestep, latents).prev_sample
             _ = self._decode_latents_batch(probe_latents)
@@ -628,6 +644,166 @@ class V1Editor:
         }
 
     @classmethod
+    def _resize_gt_mask_to_shape(cls, gt_mask: np.ndarray, map_shape: tuple[int, int]) -> np.ndarray:
+        gt_mask_array = gt_mask.astype(np.uint8)
+        if gt_mask_array.shape[:2] != map_shape:
+            gt_mask_resized = Image.fromarray(gt_mask_array * 255).resize(
+                (map_shape[1], map_shape[0]),
+                Image.Resampling.NEAREST,
+            )
+            gt_mask_array = (np.asarray(gt_mask_resized) > 127).astype(np.uint8)
+        return gt_mask_array
+
+    @staticmethod
+    def _compute_gt_alignment_stats(map_array: np.ndarray, gt_mask: np.ndarray) -> dict[str, float | int | None]:
+        flat = map_array.astype(np.float32).reshape(-1)
+        gt_flat = gt_mask.astype(bool).reshape(-1)
+        total_pixels = int(flat.size)
+        gt_area = int(gt_flat.sum())
+        inside_values = flat[gt_flat]
+        outside_values = flat[~gt_flat]
+        inside_mass = float(inside_values.sum()) if inside_values.size > 0 else 0.0
+        outside_mass = float(outside_values.sum()) if outside_values.size > 0 else 0.0
+        total_mass = inside_mass + outside_mass
+        inside_mean = float(inside_values.mean()) if inside_values.size > 0 else 0.0
+        outside_mean = float(outside_values.mean()) if outside_values.size > 0 else 0.0
+
+        threshold_at_gt_area: float | None = None
+        iou_at_gt_area: float | None = None
+        precision_at_gt_area: float | None = None
+        recall_at_gt_area: float | None = None
+
+        if total_pixels > 0:
+            if gt_area <= 0:
+                pred_mask = np.zeros(total_pixels, dtype=bool)
+                threshold_at_gt_area = 1.0
+            elif gt_area >= total_pixels:
+                pred_mask = np.ones(total_pixels, dtype=bool)
+                threshold_at_gt_area = 0.0
+            else:
+                pred_mask = np.zeros(total_pixels, dtype=bool)
+                split_index = total_pixels - gt_area
+                top_indices = np.argpartition(flat, split_index)[split_index:]
+                pred_mask[top_indices] = True
+                threshold_at_gt_area = float(flat[top_indices].min()) if top_indices.size > 0 else None
+
+            intersection = int(np.logical_and(pred_mask, gt_flat).sum())
+            union = int(np.logical_or(pred_mask, gt_flat).sum())
+            pred_area = int(pred_mask.sum())
+            iou_at_gt_area = float(intersection / union) if union > 0 else None
+            precision_at_gt_area = float(intersection / pred_area) if pred_area > 0 else None
+            recall_at_gt_area = float(intersection / gt_area) if gt_area > 0 else None
+
+        return {
+            "pixel_count": total_pixels,
+            "gt_area_pixels": gt_area,
+            "gt_area_ratio": float(gt_area / total_pixels) if total_pixels > 0 else 0.0,
+            "inside_mean": inside_mean,
+            "outside_mean": outside_mean,
+            "inside_outside_gap": float(inside_mean - outside_mean),
+            "inside_outside_ratio": float(inside_mean / max(outside_mean, 1e-6)),
+            "inside_mass": inside_mass,
+            "outside_mass": outside_mass,
+            "inside_mass_ratio": float(inside_mass / max(total_mass, 1e-6)),
+            "outside_mass_ratio": float(outside_mass / max(total_mass, 1e-6)),
+            "threshold_at_gt_area": threshold_at_gt_area,
+            "iou_at_gt_area": iou_at_gt_area,
+            "precision_at_gt_area": precision_at_gt_area,
+            "recall_at_gt_area": recall_at_gt_area,
+        }
+
+    @classmethod
+    def _write_gt_alignment_analysis(
+        cls,
+        method_dir: Path,
+        aux_history: list[dict[str, np.ndarray]],
+        gt_mask: np.ndarray | None,
+        trace_rows: list[dict[str, float | int]],
+        early_step_count: int,
+    ) -> tuple[Path | None, Path | None, Path | None, dict[str, object]]:
+        if gt_mask is None or not aux_history:
+            return None, None, None, {}
+
+        map_shape: tuple[int, int] | None = None
+        for step_payload in aux_history:
+            if "discrepancy" in step_payload:
+                map_shape = tuple(int(v) for v in step_payload["discrepancy"].shape[:2])
+                break
+            if "mask" in step_payload:
+                map_shape = tuple(int(v) for v in step_payload["mask"].shape[:2])
+                break
+        if map_shape is None:
+            return None, None, None, {}
+
+        gt_mask_array = cls._resize_gt_mask_to_shape(gt_mask, map_shape)
+        rows: list[dict[str, float | int | str | None]] = []
+        raw_arrays: dict[str, np.ndarray] = {"gt_mask": gt_mask_array.astype(np.uint8)}
+        early_count = max(1, min(int(early_step_count), len(aux_history)))
+
+        for step_idx, step_payload in enumerate(aux_history):
+            trace_row = trace_rows[step_idx] if step_idx < len(trace_rows) else {}
+            timestep_value = trace_row.get("timestep")
+            for map_key in ("discrepancy", "mask"):
+                if map_key not in step_payload:
+                    continue
+                map_array = step_payload[map_key].astype(np.float32)
+                row: dict[str, float | int | str | None] = {
+                    "step_idx": step_idx,
+                    "timestep": int(timestep_value) if isinstance(timestep_value, (int, np.integer)) else timestep_value,
+                    "map_key": map_key,
+                }
+                row.update(cls._compute_gt_alignment_stats(map_array, gt_mask_array))
+                rows.append(row)
+                if step_idx < early_count:
+                    raw_arrays[f"step_{step_idx:02d}_{map_key}"] = map_array
+
+        summary: dict[str, object] = {"early_step_count": early_count}
+        for map_key in ("discrepancy", "mask"):
+            key_rows = [row for row in rows if row.get("map_key") == map_key]
+            if not key_rows:
+                continue
+            early_rows = [row for row in key_rows if int(row.get("step_idx", -1)) < early_count]
+            key_summary: dict[str, object] = {
+                "step_count": len(key_rows),
+                "early_step_count": len(early_rows),
+            }
+            for prefix, selected_rows in (("all", key_rows), ("early", early_rows)):
+                if not selected_rows:
+                    continue
+                for stat_name in (
+                    "inside_mean",
+                    "outside_mean",
+                    "inside_outside_gap",
+                    "inside_outside_ratio",
+                    "inside_mass_ratio",
+                    "outside_mass_ratio",
+                    "gt_area_ratio",
+                ):
+                    values = [float(row[stat_name]) for row in selected_rows if row.get(stat_name) is not None]
+                    if values:
+                        key_summary[f"{prefix}_{stat_name}"] = float(np.mean(values))
+                for stat_name in ("iou_at_gt_area", "precision_at_gt_area", "recall_at_gt_area"):
+                    values = [float(row[stat_name]) for row in selected_rows if row.get(stat_name) is not None]
+                    if values:
+                        key_summary[f"{prefix}_{stat_name}"] = float(np.mean(values))
+            summary[map_key] = key_summary
+
+        csv_path = method_dir / "gt_alignment_analysis.csv"
+        json_path = method_dir / "gt_alignment_analysis.json"
+        raw_maps_path = method_dir / "gt_alignment_raw_maps.npz"
+        save_csv_records(csv_path, rows)
+        save_json(
+            json_path,
+            {
+                "summary": summary,
+                "rows": rows,
+                "raw_maps_path": str(raw_maps_path),
+            },
+        )
+        np.savez_compressed(raw_maps_path, **raw_arrays)
+        return csv_path, json_path, raw_maps_path, summary
+
+    @classmethod
     def _write_step_diagnostics(
         cls,
         method_dir: Path,
@@ -745,6 +921,13 @@ class V1Editor:
         aux_summary_path = self._save_aux_outputs(aux_history, method_dir, sample.gt_mask)
         self._save_selected_step_outputs(aux_history, method_dir)
         delta_trace_path = self._write_delta_trace(method_dir, trace_rows)
+        gt_alignment_csv_path, gt_alignment_json_path, gt_alignment_raw_maps_path, gt_alignment_summary = self._write_gt_alignment_analysis(
+            method_dir,
+            aux_history,
+            sample.gt_mask,
+            trace_rows,
+            early_step_count=self.config.mask.selected_step_count,
+        )
         diagnostics_csv_path, diagnostics_json_path, diagnostics_summary = self._write_step_diagnostics(
             method_dir,
             method_name,
@@ -763,6 +946,12 @@ class V1Editor:
         )
         debug_payload = json.loads(debug_json_path.read_text(encoding="utf-8"))
         debug_payload["focus_terms"] = focus_terms
+        debug_payload["gt_alignment_analysis"] = {
+            "csv_path": str(gt_alignment_csv_path) if gt_alignment_csv_path else None,
+            "json_path": str(gt_alignment_json_path) if gt_alignment_json_path else None,
+            "raw_maps_path": str(gt_alignment_raw_maps_path) if gt_alignment_raw_maps_path else None,
+            "summary": gt_alignment_summary,
+        }
         save_json(debug_json_path, debug_payload)
 
         return MethodResult(
@@ -820,6 +1009,7 @@ class V1Editor:
 
         aux_histories: list[list[dict[str, np.ndarray]]] = [[] for _ in range(batch_size)]
         trace_histories: list[list[dict[str, float | int]]] = [[] for _ in range(batch_size)]
+        total_steps = len(self.pipe.scheduler.timesteps)
 
         for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
             source_latent = source_latents[step_idx]
@@ -841,7 +1031,15 @@ class V1Editor:
                 aux_tensor["mask"] = mask
                 eps = eps_tar
             else:
-                mask, aux_tensor = builder.build(eps_src, target_noise, latents, source_latent, attention_map)
+                mask, aux_tensor = builder.build(
+                    eps_src,
+                    target_noise,
+                    latents,
+                    source_latent,
+                    attention_map,
+                    step_idx=step_idx,
+                    total_steps=total_steps,
+                )
                 eps = eps_src + mask * (eps_tar - eps_src)
 
             delta_values = target_stats.get("delta_per_sample", [])
@@ -853,6 +1051,7 @@ class V1Editor:
             src_tar_gap = torch.abs(eps_tar - eps_src).flatten(1).mean(dim=1)
             applied_gap = torch.abs(eps - eps_src).flatten(1).mean(dim=1)
             blend_strength = torch.where(src_tar_gap > 1e-8, applied_gap / src_tar_gap, torch.zeros_like(applied_gap))
+            gamma_t = builder.latent_weight_for_step(step_idx=step_idx, total_steps=total_steps)
 
             scheduler_output = self.pipe.scheduler.step(eps, timestep, latents)
             latents = scheduler_output.prev_sample
@@ -868,6 +1067,7 @@ class V1Editor:
                         "src_tar_gap": float(src_tar_gap[sample_idx].item()),
                         "applied_gap": float(applied_gap[sample_idx].item()),
                         "blend_strength": float(blend_strength[sample_idx].item()),
+                        "gamma_t": gamma_t,
                     }
                 )
                 aux_numpy = {

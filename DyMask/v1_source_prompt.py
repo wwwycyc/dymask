@@ -152,6 +152,7 @@ class V1SourcePromptEditor(BaseV1Editor):
             dim=0,
         )
         timestep = self.pipe.scheduler.timesteps[0]
+        total_steps = len(self.pipe.scheduler.timesteps)
         try:
             self.attention_store.reset()
             eps_src = self.source_predictor.predict(latents, timestep, source_embeddings)
@@ -170,7 +171,15 @@ class V1SourcePromptEditor(BaseV1Editor):
             if method_name == "target_only":
                 eps = eps_tar
             else:
-                mask, _aux_tensor = builder.build(eps_src, target_noise, latents, source_latents, attention_map)
+                mask, _aux_tensor = builder.build(
+                    eps_src,
+                    target_noise,
+                    latents,
+                    source_latents,
+                    attention_map,
+                    step_idx=0,
+                    total_steps=total_steps,
+                )
                 eps = eps_src + mask * (eps_tar - eps_src)
             probe_latents = self.pipe.scheduler.step(eps, timestep, latents).prev_sample
             _ = self._decode_latents_batch(probe_latents)
@@ -226,6 +235,7 @@ class V1SourcePromptEditor(BaseV1Editor):
 
         aux_histories: list[list[dict[str, np.ndarray]]] = [[] for _ in range(batch_size)]
         trace_histories: list[list[dict[str, float | int]]] = [[] for _ in range(batch_size)]
+        total_steps = len(self.pipe.scheduler.timesteps)
 
         for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
             source_latent = source_latents[step_idx]
@@ -251,7 +261,15 @@ class V1SourcePromptEditor(BaseV1Editor):
                 aux_tensor["mask"] = mask
                 eps = eps_tar
             else:
-                mask, aux_tensor = builder.build(eps_src, target_noise, latents, source_latent, attention_map)
+                mask, aux_tensor = builder.build(
+                    eps_src,
+                    target_noise,
+                    latents,
+                    source_latent,
+                    attention_map,
+                    step_idx=step_idx,
+                    total_steps=total_steps,
+                )
                 eps = eps_src + mask * (eps_tar - eps_src)
 
             delta_values = target_stats.get("delta_per_sample", [])
@@ -263,6 +281,7 @@ class V1SourcePromptEditor(BaseV1Editor):
             src_tar_gap = torch.abs(eps_tar - eps_src).flatten(1).mean(dim=1)
             applied_gap = torch.abs(eps - eps_src).flatten(1).mean(dim=1)
             blend_strength = torch.where(src_tar_gap > 1e-8, applied_gap / src_tar_gap, torch.zeros_like(applied_gap))
+            gamma_t = builder.latent_weight_for_step(step_idx=step_idx, total_steps=total_steps)
 
             scheduler_output = self.pipe.scheduler.step(eps, timestep, latents)
             latents = scheduler_output.prev_sample
@@ -278,6 +297,7 @@ class V1SourcePromptEditor(BaseV1Editor):
                         "src_tar_gap": float(src_tar_gap[sample_idx].item()),
                         "applied_gap": float(applied_gap[sample_idx].item()),
                         "blend_strength": float(blend_strength[sample_idx].item()),
+                        "gamma_t": gamma_t,
                     }
                 )
                 aux_numpy = {
