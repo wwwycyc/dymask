@@ -6,8 +6,15 @@ from typing import Any
 
 import numpy as np
 import torch
-from diffusers import DDIMInverseScheduler, DDIMScheduler, StableDiffusionDiffEditPipeline
+from diffusers import (
+    AutoencoderKL,
+    DDIMInverseScheduler,
+    DDIMScheduler,
+    StableDiffusionDiffEditPipeline,
+    UNet2DConditionModel,
+)
 from PIL import Image
+from transformers import CLIPTextModel, CLIPTokenizer
 
 from .adapters import clear_cuda_memory
 from .config import ExperimentConfig, RuntimeConfig
@@ -30,30 +37,60 @@ class DiffEditConfig:
 def build_diffedit_pipeline(runtime: RuntimeConfig) -> StableDiffusionDiffEditPipeline:
     device = runtime.device if torch.cuda.is_available() else "cpu"
     dtype = torch.float16 if device.startswith("cuda") and runtime.dtype == "float16" else torch.float32
+
     if device.startswith("cuda"):
         torch.backends.cuda.matmul.allow_tf32 = runtime.enable_tf32
         torch.backends.cudnn.allow_tf32 = runtime.enable_tf32
         if hasattr(torch, "set_float32_matmul_precision"):
             torch.set_float32_matmul_precision("high" if runtime.enable_tf32 else "highest")
 
-    pipe_kwargs = {
-        "torch_dtype": dtype,
-        "safety_checker": None,
-        "feature_extractor": None,
-        "local_files_only": runtime.local_files_only,
-        "requires_safety_checker": False,
-    }
-    try:
-        pipe = StableDiffusionDiffEditPipeline.from_pretrained(runtime.model_id, **pipe_kwargs)
-    except TypeError:
-        pipe_kwargs.pop("requires_safety_checker", None)
-        pipe = StableDiffusionDiffEditPipeline.from_pretrained(runtime.model_id, **pipe_kwargs)
-
-    pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config, clip_sample=False, set_alpha_to_one=False)
-    pipe.inverse_scheduler = DDIMInverseScheduler.from_config(
-        pipe.scheduler.config,
+    tokenizer = CLIPTokenizer.from_pretrained(
+        runtime.model_id,
+        subfolder="tokenizer",
+        local_files_only=runtime.local_files_only,
+    )
+    text_encoder = CLIPTextModel.from_pretrained(
+        runtime.model_id,
+        subfolder="text_encoder",
+        torch_dtype=dtype,
+        local_files_only=runtime.local_files_only,
+    )
+    vae = AutoencoderKL.from_pretrained(
+        runtime.model_id,
+        subfolder="vae",
+        torch_dtype=dtype,
+        local_files_only=runtime.local_files_only,
+        use_safetensors=False,
+    )
+    unet = UNet2DConditionModel.from_pretrained(
+        runtime.model_id,
+        subfolder="unet",
+        torch_dtype=dtype,
+        local_files_only=runtime.local_files_only,
+        use_safetensors=False,
+    )
+    scheduler = DDIMScheduler.from_pretrained(
+        runtime.model_id,
+        subfolder="scheduler",
+        local_files_only=runtime.local_files_only,
         clip_sample=False,
         set_alpha_to_one=False,
+    )
+    inverse_scheduler = DDIMInverseScheduler.from_config(
+        scheduler.config,
+        clip_sample=False,
+        set_alpha_to_one=False,
+    )
+    pipe = StableDiffusionDiffEditPipeline(
+        vae=vae,
+        text_encoder=text_encoder,
+        tokenizer=tokenizer,
+        unet=unet,
+        scheduler=scheduler,
+        safety_checker=None,
+        feature_extractor=None,
+        inverse_scheduler=inverse_scheduler,
+        requires_safety_checker=False,
     )
 
     if runtime.enable_cpu_offload and torch.cuda.is_available():
@@ -93,6 +130,7 @@ class DiffEditEditor:
         self.config = config
         self.diffedit_config = diffedit_config
         self.inversion_backend = inversion_backend
+        self._default_attn_processors = dict(pipe.unet.attn_processors)
 
     @property
     def device(self):
@@ -121,6 +159,9 @@ class DiffEditEditor:
     @staticmethod
     def _load_sample_pil(path: Path) -> Image.Image:
         return Image.open(path).convert("RGB")
+
+    def _restore_default_attention_processors(self) -> None:
+        self.pipe.unet.set_attn_processor(dict(self._default_attn_processors))
 
     def _get_edit_timesteps(self) -> torch.Tensor:
         try:
@@ -158,7 +199,12 @@ class DiffEditEditor:
             "max": float(flat.max()) if flat.size else 0.0,
         }
 
-    def _save_mask_outputs(self, method_dir: Path, mask_latent: np.ndarray, image_size: tuple[int, int]) -> tuple[Path, Path]:
+    def _save_mask_outputs(
+        self,
+        method_dir: Path,
+        mask_latent: np.ndarray,
+        image_size: tuple[int, int],
+    ) -> tuple[Path, Path, np.ndarray]:
         latent_mask_path = method_dir / "mask_latent.png"
         resized_mask_path = method_dir / "mask.png"
         save_image(latent_mask_path, mask_to_rgb(mask_latent))
@@ -168,7 +214,67 @@ class DiffEditEditor:
         )
         resized_mask = (np.asarray(resized) > 127).astype(np.float32)
         save_image(resized_mask_path, mask_to_rgb(resized_mask))
-        return latent_mask_path, resized_mask_path
+        return latent_mask_path, resized_mask_path, resized_mask
+
+    def _write_gt_alignment_analysis(
+        self,
+        method_dir: Path,
+        mask_latent: np.ndarray,
+        mask_image: np.ndarray,
+        gt_mask: np.ndarray | None,
+    ) -> tuple[Path | None, Path | None, Path | None, dict[str, object]]:
+        if gt_mask is None:
+            return None, None, None, {}
+
+        rows: list[dict[str, float | int | str | None]] = []
+        raw_arrays: dict[str, np.ndarray] = {}
+        for map_key, map_array in (
+            ("mask_latent", mask_latent.astype(np.float32)),
+            ("mask_image", mask_image.astype(np.float32)),
+        ):
+            gt_mask_array = BaseV1Editor._resize_gt_mask_to_shape(gt_mask, map_array.shape[:2])
+            row: dict[str, float | int | str | None] = {"map_key": map_key}
+            row.update(BaseV1Editor._compute_gt_alignment_stats(map_array, gt_mask_array))
+            rows.append(row)
+            raw_arrays[f"{map_key}_map"] = map_array
+            raw_arrays[f"{map_key}_gt_mask"] = gt_mask_array.astype(np.uint8)
+
+        summary: dict[str, object] = {}
+        for row in rows:
+            map_key = str(row["map_key"])
+            summary[map_key] = {
+                key: row[key]
+                for key in (
+                    "pixel_count",
+                    "gt_area_pixels",
+                    "gt_area_ratio",
+                    "inside_mean",
+                    "outside_mean",
+                    "inside_outside_gap",
+                    "inside_outside_ratio",
+                    "inside_mass_ratio",
+                    "outside_mass_ratio",
+                    "threshold_at_gt_area",
+                    "iou_at_gt_area",
+                    "precision_at_gt_area",
+                    "recall_at_gt_area",
+                )
+            }
+
+        csv_path = method_dir / "gt_alignment_analysis.csv"
+        json_path = method_dir / "gt_alignment_analysis.json"
+        raw_maps_path = method_dir / "gt_alignment_raw_maps.npz"
+        save_csv_records(csv_path, rows)
+        save_json(
+            json_path,
+            {
+                "summary": summary,
+                "rows": rows,
+                "raw_maps_path": str(raw_maps_path),
+            },
+        )
+        np.savez_compressed(raw_maps_path, **raw_arrays)
+        return csv_path, json_path, raw_maps_path, summary
 
     def _save_aux_summary(
         self,
@@ -243,27 +349,40 @@ class DiffEditEditor:
         edited_path = method_dir / "edited.png"
         save_image(edited_path, edited_image)
 
-        latent_mask_path, resized_mask_path = self._save_mask_outputs(method_dir, mask_latent, source_size)
-        resized_mask = np.asarray(Image.open(resized_mask_path).convert("RGB"))
+        latent_mask_path, resized_mask_path, resized_mask = self._save_mask_outputs(method_dir, mask_latent, source_size)
         aux_summary_path = self._save_aux_summary(
             sample,
             method_dir,
             source_image,
             inversion.reconstruction_image,
             edited_image,
-            resized_mask,
+            mask_to_rgb(resized_mask),
         )
 
         mask_stats = self._mask_stats(mask_latent)
+        image_mask_stats = self._mask_stats(resized_mask)
         diagnostics_row = {
             "mask_latent_mean": mask_stats["mean"],
             "mask_latent_std": mask_stats["std"],
             "mask_latent_active_ratio": mask_stats["active_ratio"],
             "mask_latent_min": mask_stats["min"],
             "mask_latent_max": mask_stats["max"],
+            "mask_image_mean": image_mask_stats["mean"],
+            "mask_image_std": image_mask_stats["std"],
+            "mask_image_active_ratio": image_mask_stats["active_ratio"],
+            "mask_image_min": image_mask_stats["min"],
+            "mask_image_max": image_mask_stats["max"],
         }
         diagnostics_csv_path = method_dir / "mask_diagnostics.csv"
         diagnostics_json_path = method_dir / "mask_diagnostics.json"
+        gt_alignment_csv_path, gt_alignment_json_path, gt_alignment_raw_maps_path, gt_alignment_summary = (
+            self._write_gt_alignment_analysis(
+                method_dir=method_dir,
+                mask_latent=mask_latent,
+                mask_image=resized_mask,
+                gt_mask=sample.gt_mask,
+            )
+        )
         save_csv_records(diagnostics_csv_path, [diagnostics_row])
         save_json(
             diagnostics_json_path,
@@ -272,6 +391,12 @@ class DiffEditEditor:
                 "mask_stats": diagnostics_row,
                 "mask_latent_path": str(latent_mask_path),
                 "mask_path": str(resized_mask_path),
+                "gt_alignment_analysis": {
+                    "csv_path": str(gt_alignment_csv_path) if gt_alignment_csv_path else None,
+                    "json_path": str(gt_alignment_json_path) if gt_alignment_json_path else None,
+                    "raw_maps_path": str(gt_alignment_raw_maps_path) if gt_alignment_raw_maps_path else None,
+                    "summary": gt_alignment_summary,
+                },
             },
         )
 
@@ -302,6 +427,12 @@ class DiffEditEditor:
                     "aux_summary_path": str(aux_summary_path),
                     "diagnostics_csv_path": str(diagnostics_csv_path),
                     "diagnostics_json_path": str(diagnostics_json_path),
+                    "gt_alignment_csv_path": str(gt_alignment_csv_path) if gt_alignment_csv_path else None,
+                    "gt_alignment_json_path": str(gt_alignment_json_path) if gt_alignment_json_path else None,
+                    "gt_alignment_raw_maps_path": str(gt_alignment_raw_maps_path) if gt_alignment_raw_maps_path else None,
+                },
+                "gt_alignment_analysis": {
+                    "summary": gt_alignment_summary,
                 },
             },
         )
@@ -325,6 +456,7 @@ class DiffEditEditor:
     ) -> list[MethodResult]:
         source_images = [self._load_sample_image(sample.source_image_path) for sample in samples]
         source_pils = [self._load_sample_pil(sample.source_image_path) for sample in samples]
+        self._restore_default_attention_processors()
         mask_output = self.pipe.generate_mask(
             image=source_pils,
             source_prompt=[sample.source_prompt for sample in samples],
@@ -387,6 +519,8 @@ class DiffEditEditor:
                 inversion = self.inversion_backend.invert(source_image, source_prompt=sample.source_prompt)
             except TypeError:
                 inversion = self.inversion_backend.invert(source_image)
+            finally:
+                self._restore_default_attention_processors()
 
             save_image(sample.sample_dir / "source_reconstruction.png", inversion.reconstruction_image)
             save_json(sample.sample_dir / "inversion.json", inversion.metadata)
