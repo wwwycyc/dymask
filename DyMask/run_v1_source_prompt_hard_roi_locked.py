@@ -262,10 +262,10 @@ def main(argv: list[str] | None = None) -> None:
         save_csv_records(run_dir / "metrics_summary.csv", metric_runner.summarize(case_rows))
         write_overview_method_metric_tables(run_dir, case_rows, overview_methods)
 
-    build_run_overview(run_dir, run_samples, batch_results, overview_methods)
     for sample in run_samples:
         _inversion, method_results = batch_results[sample.sample_id]
-        build_sample_overview(sample.sample_dir, sample, method_results)
+        build_sample_overview(sample, method_results, config.runtime.image_size, overview_methods)
+    build_run_overview(run_dir, run_samples)
 
     logger.log(
         stage="source_prompt_hard_roi_locked",
