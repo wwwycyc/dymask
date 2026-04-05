@@ -1,0 +1,232 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
+
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from DyMask.data import MagicBrushParquetDataset, PIEBenchDataset
+from DyMask.diffedit import DiffEditConfig
+from DyMask.logging_utils import MarkdownExperimentLogger
+from DyMask.metrics import MetricRunner
+from DyMask.nti_inversion import NTIInversionBackend
+from DyMask.run_v1 import (
+    build_config,
+    build_parser,
+    build_run_overview,
+    build_sample_overview,
+    materialize_from_sample_json,
+    resolve_overview_methods,
+    write_overview_method_metric_tables,
+)
+from DyMask.run_v1_source_prompt_hard_roi_locked import (
+    _build_stable_diffusion_pipeline_safe,
+    _has_output_root_arg,
+)
+from DyMask.utils import make_timestamped_run_dir, save_csv_records, save_json
+from DyMask.v1_source_prompt_validated_support import V1SourcePromptValidatedSupportEditor
+
+
+def main(argv: list[str] | None = None) -> None:
+    argv_list = list(sys.argv[1:] if argv is None else argv)
+    parser = build_parser()
+    parser.add_argument("--num-maps-per-mask", type=int, default=10)
+    parser.add_argument("--mask-encode-strength", type=float, default=0.5)
+    parser.add_argument("--mask-thresholding-ratio", type=float, default=3.0)
+    parser.add_argument("--inpaint-strength", type=float, default=1.0)
+    parser.add_argument("--support-rho", type=float, default=0.85)
+    parser.add_argument("--support-lambda", type=float, default=0.5)
+    parser.add_argument("--support-kappa", type=float, default=8.0)
+    parser.add_argument("--support-alpha", type=float, default=8.0)
+    parser.add_argument("--support-delta", type=float, default=0.35)
+    args = parser.parse_args(argv_list)
+    if not _has_output_root_arg(argv_list):
+        args.output_root = "runs/dymask_v1_source_prompt_validated_support"
+
+    config = build_config(args)
+    run_prefix = (
+        f"{config.phase}_source_prompt_validated_support"
+        if config.phase != "custom"
+        else "v1_source_prompt_validated_support"
+    )
+    run_dir = make_timestamped_run_dir(config.sampling.output_root, prefix=run_prefix)
+    logger = MarkdownExperimentLogger(Path("log.md"))
+    diffedit_config = DiffEditConfig(
+        num_maps_per_mask=args.num_maps_per_mask,
+        mask_encode_strength=args.mask_encode_strength,
+        mask_thresholding_ratio=args.mask_thresholding_ratio,
+        inpaint_strength=args.inpaint_strength,
+    )
+
+    save_json(
+        run_dir / "variant.json",
+        {
+            "variant_name": "source_prompt_validated_support_v1",
+            "ddim_inversion_prompt_mode": "source_prompt",
+            "reference_branch_prompt_mode": "source_prompt",
+            "attention_prompt_mode": "target_prompt",
+            "support_rho": float(args.support_rho),
+            "support_lambda": float(args.support_lambda),
+            "support_kappa": float(args.support_kappa),
+            "support_alpha": float(args.support_alpha),
+            "support_delta": float(args.support_delta),
+            "mechanism": "Support-validated discrepancy accumulation with roi-aware validation probability",
+            "support_update": "S_t = rho * S_{t-1} + (1-rho) * (Norm(D_t) * Pi_t)",
+            "support_probability": (
+                "Pi_t = softmax-style validation probability over consistent vs inconsistent support, "
+                "implemented as sigmoid(kappa * (g_t - h_t))"
+            ),
+            "support_consistent": "g_t = lambda * A_t + (1-lambda) * R for attention-aware methods, else R",
+            "support_inconsistent": "h_t = (1-R) * (1-A_t) for attention-aware methods, else 1-R",
+            "final_mask": "M_t = sigmoid(alpha * (S_t - delta))",
+            "diffedit": diffedit_config.to_dict(),
+        },
+    )
+
+    sample_output_dir = run_dir / "samples"
+    if args.sample_json:
+        materialized_samples, manifest = materialize_from_sample_json(Path(args.sample_json), sample_output_dir)
+    else:
+        if config.sampling.piebench_path is not None:
+            dataset = PIEBenchDataset(config.sampling.piebench_path)
+        else:
+            dataset = MagicBrushParquetDataset(config.sampling.parquet_path)
+        sampled_indices = dataset.sample_indices(config.sampling.sample_count, config.sampling.sample_seed)
+        if args.row_indices:
+            sampled_indices = [int(index) for index in args.row_indices]
+        sampled_records = dataset.load_records(sampled_indices)
+        materialized_samples, manifest = dataset.materialize_samples(
+            sampled_records,
+            sample_output_dir,
+            config.runtime.image_size,
+        )
+
+    MagicBrushParquetDataset.write_manifest(run_dir, config.sampling.manifest_name, manifest)
+    save_json(run_dir / "config.json", config.to_dict())
+    logger.log(
+        stage="source_prompt_validated_support",
+        operation="prepare run",
+        inputs={
+            "phase": config.phase,
+            "methods": list(config.methods),
+            "run_dir": str(run_dir),
+            "support_rho": float(args.support_rho),
+            "support_lambda": float(args.support_lambda),
+            "support_kappa": float(args.support_kappa),
+            "support_alpha": float(args.support_alpha),
+            "support_delta": float(args.support_delta),
+            "diffedit": diffedit_config.to_dict(),
+        },
+        result={"sample_ids": [sample.sample_id for sample in materialized_samples]},
+        conclusion="samples and validated-support variant config saved",
+        next_step="run inversion and editing",
+    )
+
+    if config.dry_run:
+        return
+
+    pipe = _build_stable_diffusion_pipeline_safe(config.runtime)
+    inversion_backend = None
+    if config.runtime.inversion_backend == "nti":
+        inversion_backend = NTIInversionBackend(pipe, config.runtime)
+    editor = V1SourcePromptValidatedSupportEditor(
+        pipe,
+        config,
+        support_rho=args.support_rho,
+        support_lambda=args.support_lambda,
+        support_kappa=args.support_kappa,
+        support_alpha=args.support_alpha,
+        support_delta=args.support_delta,
+        diffedit_config=diffedit_config,
+        inversion_backend=inversion_backend,
+    )
+    metric_runner = None if config.skip_metrics else MetricRunner(config.runtime, config.metrics)
+
+    overview_methods = resolve_overview_methods(config.methods)
+    case_rows: list[dict] = []
+    run_samples = materialized_samples[: config.sampling.run_limit]
+    batch_results = editor.run_samples(run_samples)
+
+    for sample in run_samples:
+        inversion, method_results = batch_results[sample.sample_id]
+        source_image = np.asarray(Image.open(sample.source_image_path).convert("RGB"))
+        target_reference = None
+        if sample.target_image_path is not None and Path(sample.target_image_path).exists():
+            target_reference = np.asarray(Image.open(sample.target_image_path).convert("RGB"))
+
+        phase0_row = {
+            "sample_id": sample.sample_id,
+            "method_name": "phase0_reconstruction",
+            "source_prompt": sample.source_prompt,
+            "edit_prompt": sample.edit_prompt,
+            "target_prompt": sample.target_prompt,
+            "source_recon_psnr": metric_runner.compute_psnr(source_image, inversion.reconstruction_image)
+            if metric_runner is not None
+            else None,
+            "source_reconstruction_path": str(sample.sample_dir / "source_reconstruction.png"),
+        }
+        if metric_runner is not None:
+            try:
+                phase0_row["source_recon_lpips"] = metric_runner.compute_lpips(source_image, inversion.reconstruction_image)
+            except Exception as exc:
+                phase0_row["source_recon_lpips"] = None
+                phase0_row["source_recon_lpips_error"] = str(exc)
+        case_rows.append(phase0_row)
+
+        for result in method_results:
+            row = {
+                "sample_id": sample.sample_id,
+                "method_name": result.method_name,
+                "source_prompt": sample.source_prompt,
+                "edit_prompt": sample.edit_prompt,
+                "target_prompt": sample.target_prompt,
+                "edited_image_path": str(result.edited_image_path),
+                "mask_summary_path": str(result.mask_summary_path),
+                "aux_summary_path": str(result.aux_summary_path),
+                "delta_trace_path": str(result.delta_trace_path),
+                "diagnostics_csv_path": str(result.diagnostics_csv_path),
+                "diagnostics_json_path": str(result.diagnostics_json_path),
+                "debug_json_path": str(result.debug_json_path),
+                "variant": "source_prompt_validated_support_v1",
+            }
+            if metric_runner is not None:
+                metrics_row = metric_runner.evaluate_case(
+                    source_image=source_image,
+                    reconstruction_image=inversion.reconstruction_image,
+                    edited_image=result.edited_image,
+                    target_text=sample.target_prompt,
+                    reference_edited=target_reference,
+                    gt_mask=sample.gt_mask,
+                )
+                row.update(metrics_row)
+            case_rows.append(row)
+
+    save_csv_records(run_dir / "metrics_case_level.csv", case_rows)
+    if metric_runner is not None:
+        save_csv_records(run_dir / "metrics_summary.csv", metric_runner.summarize(case_rows))
+        write_overview_method_metric_tables(run_dir, case_rows, overview_methods)
+
+    for sample in run_samples:
+        _inversion, method_results = batch_results[sample.sample_id]
+        build_sample_overview(sample, method_results, config.runtime.image_size, overview_methods)
+    build_run_overview(run_dir, run_samples)
+
+    logger.log(
+        stage="source_prompt_validated_support",
+        operation="complete run",
+        inputs={"run_dir": str(run_dir)},
+        result={
+            "case_metrics_csv": str(run_dir / "metrics_case_level.csv"),
+            "summary_csv": str(run_dir / "metrics_summary.csv") if metric_runner is not None else None,
+        },
+        conclusion="validated-support prompt run finished",
+        next_step="inspect summary tables and support-validation diagnostics",
+    )
+
+
+if __name__ == "__main__":
+    main()
