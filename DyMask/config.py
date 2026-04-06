@@ -76,9 +76,12 @@ class MetricConfig:
     enable_psnr: bool = True
     enable_lpips: bool = True
     enable_clipscore: bool = True
+    enable_structure_distance: bool = True
     lpips_net: str = "squeeze"
     clip_local_files_only: bool = True
     clipscore_text_prefix: str = "A photo depicts"
+    dino_model_name: str = "dino_vitb8"
+    dino_global_patch_size: int = 224
     strict: bool = False
 
 

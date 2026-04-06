@@ -269,6 +269,7 @@ def main(argv: list[str] | None = None) -> None:
                 source_image=source_image,
                 reconstruction_image=inversion.reconstruction_image,
                 edited_image=method_result.edited_image,
+                source_text=sample.source_prompt,
                 target_text=sample.target_prompt,
                 reference_edited=target_reference,
                 gt_mask=sample.gt_mask,

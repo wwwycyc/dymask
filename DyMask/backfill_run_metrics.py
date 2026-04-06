@@ -134,6 +134,7 @@ def main() -> None:
                 source_image=source_image,
                 reconstruction_image=reconstruction_image,
                 edited_image=edited_image,
+                source_text=sample_meta["source_prompt"],
                 target_text=sample_meta["target_prompt"],
                 reference_edited=target_reference,
                 gt_mask=gt_mask,

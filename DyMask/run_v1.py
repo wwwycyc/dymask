@@ -340,14 +340,14 @@ def build_run_overview(run_dir: Path, samples: list[MaterializedSample]) -> Path
 
 
 def _metric_mean(values: list[float | None]) -> float | None:
-    numeric = [float(value) for value in values if value is not None]
+    numeric = [float(value) for value in values if value is not None and np.isfinite(float(value))]
     if not numeric:
         return None
     return float(np.mean(numeric))
 
 
 def _metric_std(values: list[float | None]) -> float | None:
-    numeric = [float(value) for value in values if value is not None]
+    numeric = [float(value) for value in values if value is not None and np.isfinite(float(value))]
     if not numeric:
         return None
     return float(np.std(numeric, ddof=0))
@@ -373,18 +373,19 @@ def write_overview_method_metric_tables(
                 "sample_id": row.get("sample_id"),
                 "method_name": display_method_name(canonical_name),
                 "edit_reference_mode": row.get("edit_reference_mode"),
-                "clip_similarity": row.get("clip_similarity"),
-                "clip_score": row.get("clip_score"),
-                "clip_similarity_edit_part": row.get("clip_similarity_edit_part"),
-                "clip_score_edit_part": row.get("clip_score_edit_part"),
-                "target_lpips": row.get("edit_ref_lpips"),
-                "target_psnr": row.get("edit_ref_psnr"),
-                "source_lpips": row.get("edit_source_lpips"),
-                "source_psnr": row.get("edit_source_psnr"),
-                "outside_mse": row.get("outside_mse"),
-                "outside_ssim": row.get("outside_ssim"),
-                "outside_lpips": row.get("outside_lpips"),
-                "outside_psnr": row.get("outside_psnr"),
+                "clip_similarity_source_image": row.get("clip_similarity_source_image"),
+                "clip_similarity_target_image": row.get("clip_similarity_target_image"),
+                "clip_similarity_target_image_edit_part": row.get("clip_similarity_target_image_edit_part"),
+                "psnr": row.get("psnr"),
+                "lpips": row.get("lpips"),
+                "mse": row.get("mse"),
+                "ssim": row.get("ssim"),
+                "structure_distance": row.get("structure_distance"),
+                "psnr_unedit_part": row.get("psnr_unedit_part"),
+                "lpips_unedit_part": row.get("lpips_unedit_part"),
+                "mse_unedit_part": row.get("mse_unedit_part"),
+                "ssim_unedit_part": row.get("ssim_unedit_part"),
+                "structure_distance_unedit_part": row.get("structure_distance_unedit_part"),
                 "locality_ratio": row.get("locality_ratio"),
             }
         )
@@ -408,30 +409,32 @@ def write_overview_method_metric_tables(
                 "method_name": display_name,
                 "sample_count": len(method_rows),
                 "target_reference_count": sum(1 for row in method_rows if row["edit_reference_mode"] == "target_reference"),
-                "clip_similarity_mean": _metric_mean([row["clip_similarity"] for row in method_rows]),
-                "clip_similarity_std": _metric_std([row["clip_similarity"] for row in method_rows]),
-                "clip_score_mean": _metric_mean([row["clip_score"] for row in method_rows]),
-                "clip_score_std": _metric_std([row["clip_score"] for row in method_rows]),
-                "clip_similarity_edit_part_mean": _metric_mean([row["clip_similarity_edit_part"] for row in method_rows]),
-                "clip_similarity_edit_part_std": _metric_std([row["clip_similarity_edit_part"] for row in method_rows]),
-                "clip_score_edit_part_mean": _metric_mean([row["clip_score_edit_part"] for row in method_rows]),
-                "clip_score_edit_part_std": _metric_std([row["clip_score_edit_part"] for row in method_rows]),
-                "target_lpips_mean": _metric_mean([row["target_lpips"] for row in method_rows]),
-                "target_lpips_std": _metric_std([row["target_lpips"] for row in method_rows]),
-                "target_psnr_mean": _metric_mean([row["target_psnr"] for row in method_rows]),
-                "target_psnr_std": _metric_std([row["target_psnr"] for row in method_rows]),
-                "source_lpips_mean": _metric_mean([row["source_lpips"] for row in method_rows]),
-                "source_lpips_std": _metric_std([row["source_lpips"] for row in method_rows]),
-                "source_psnr_mean": _metric_mean([row["source_psnr"] for row in method_rows]),
-                "source_psnr_std": _metric_std([row["source_psnr"] for row in method_rows]),
-                "outside_mse_mean": _metric_mean([row["outside_mse"] for row in method_rows]),
-                "outside_mse_std": _metric_std([row["outside_mse"] for row in method_rows]),
-                "outside_ssim_mean": _metric_mean([row["outside_ssim"] for row in method_rows]),
-                "outside_ssim_std": _metric_std([row["outside_ssim"] for row in method_rows]),
-                "outside_lpips_mean": _metric_mean([row["outside_lpips"] for row in method_rows]),
-                "outside_lpips_std": _metric_std([row["outside_lpips"] for row in method_rows]),
-                "outside_psnr_mean": _metric_mean([row["outside_psnr"] for row in method_rows]),
-                "outside_psnr_std": _metric_std([row["outside_psnr"] for row in method_rows]),
+                "clip_similarity_source_image_mean": _metric_mean([row["clip_similarity_source_image"] for row in method_rows]),
+                "clip_similarity_source_image_std": _metric_std([row["clip_similarity_source_image"] for row in method_rows]),
+                "clip_similarity_target_image_mean": _metric_mean([row["clip_similarity_target_image"] for row in method_rows]),
+                "clip_similarity_target_image_std": _metric_std([row["clip_similarity_target_image"] for row in method_rows]),
+                "clip_similarity_target_image_edit_part_mean": _metric_mean([row["clip_similarity_target_image_edit_part"] for row in method_rows]),
+                "clip_similarity_target_image_edit_part_std": _metric_std([row["clip_similarity_target_image_edit_part"] for row in method_rows]),
+                "psnr_mean": _metric_mean([row["psnr"] for row in method_rows]),
+                "psnr_std": _metric_std([row["psnr"] for row in method_rows]),
+                "lpips_mean": _metric_mean([row["lpips"] for row in method_rows]),
+                "lpips_std": _metric_std([row["lpips"] for row in method_rows]),
+                "mse_mean": _metric_mean([row["mse"] for row in method_rows]),
+                "mse_std": _metric_std([row["mse"] for row in method_rows]),
+                "ssim_mean": _metric_mean([row["ssim"] for row in method_rows]),
+                "ssim_std": _metric_std([row["ssim"] for row in method_rows]),
+                "structure_distance_mean": _metric_mean([row["structure_distance"] for row in method_rows]),
+                "structure_distance_std": _metric_std([row["structure_distance"] for row in method_rows]),
+                "psnr_unedit_part_mean": _metric_mean([row["psnr_unedit_part"] for row in method_rows]),
+                "psnr_unedit_part_std": _metric_std([row["psnr_unedit_part"] for row in method_rows]),
+                "lpips_unedit_part_mean": _metric_mean([row["lpips_unedit_part"] for row in method_rows]),
+                "lpips_unedit_part_std": _metric_std([row["lpips_unedit_part"] for row in method_rows]),
+                "mse_unedit_part_mean": _metric_mean([row["mse_unedit_part"] for row in method_rows]),
+                "mse_unedit_part_std": _metric_std([row["mse_unedit_part"] for row in method_rows]),
+                "ssim_unedit_part_mean": _metric_mean([row["ssim_unedit_part"] for row in method_rows]),
+                "ssim_unedit_part_std": _metric_std([row["ssim_unedit_part"] for row in method_rows]),
+                "structure_distance_unedit_part_mean": _metric_mean([row["structure_distance_unedit_part"] for row in method_rows]),
+                "structure_distance_unedit_part_std": _metric_std([row["structure_distance_unedit_part"] for row in method_rows]),
                 "locality_ratio_mean": _metric_mean([row["locality_ratio"] for row in method_rows]),
                 "locality_ratio_std": _metric_std([row["locality_ratio"] for row in method_rows]),
             }
@@ -595,6 +598,7 @@ def main(argv: list[str] | None = None) -> None:
                     source_image=source_image,
                     reconstruction_image=inversion.reconstruction_image,
                     edited_image=method_result.edited_image,
+                    source_text=sample.source_prompt,
                     target_text=sample.target_prompt,
                     reference_edited=target_reference,
                     gt_mask=sample.gt_mask,

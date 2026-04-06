@@ -82,24 +82,27 @@ def make_sample_grid(sample_dir: Path) -> np.ndarray | None:
 
 def build_metric_specs(summary: list[dict]) -> list[tuple[str, str, bool]]:
     specs: list[tuple[str, str, bool]] = []
-    if any(row.get("clip_similarity_mean") is not None for row in summary):
-        specs.append(("clip_similarity_mean", "CLIP Similarity", True))
-    specs.append(("clip_score_mean", "CLIPScore", True))
-    if any(row.get("clip_score_edit_part_mean") is not None for row in summary):
-        specs.append(("clip_score_edit_part_mean", "Edit-part CLIPScore", True))
-    specs.extend(
-        [
-            ("source_psnr_mean", "Source PSNR", True),
-            ("source_lpips_mean", "Source LPIPS", False),
-        ]
-    )
-    if any(row.get("outside_lpips_mean") is not None for row in summary):
+    if any(row.get("clip_similarity_target_image_mean") is not None for row in summary):
         specs.extend(
             [
-                ("outside_psnr_mean", "Outside PSNR", True),
-                ("outside_mse_mean", "Outside MSE", False),
-                ("outside_ssim_mean", "Outside SSIM", True),
-                ("outside_lpips_mean", "Outside LPIPS", False),
+                ("clip_similarity_source_image_mean", "CLIP Similarity Source", True),
+                ("clip_similarity_target_image_mean", "CLIP Similarity Target", True),
+                ("clip_similarity_target_image_edit_part_mean", "CLIP Similarity Edit Part", True),
+            ]
+        )
+    if any(row.get("lpips_unedit_part_mean") is not None for row in summary):
+        specs.extend(
+            [
+                ("psnr_mean", "PSNR", True),
+                ("lpips_mean", "LPIPS", False),
+                ("mse_mean", "MSE", False),
+                ("ssim_mean", "SSIM", True),
+                ("structure_distance_mean", "Structure Distance", False),
+                ("psnr_unedit_part_mean", "PSNR Unedit Part", True),
+                ("lpips_unedit_part_mean", "LPIPS Unedit Part", False),
+                ("mse_unedit_part_mean", "MSE Unedit Part", False),
+                ("ssim_unedit_part_mean", "SSIM Unedit Part", True),
+                ("structure_distance_unedit_part_mean", "Structure Distance Unedit Part", False),
                 ("locality_ratio_mean", "Locality Ratio", True),
             ]
         )
