@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,12 +15,12 @@ from PIL import Image
 
 
 METHODS = [
-    ("target_only",           "target-only"),
-    ("global_blend",          "global blend"),
-    ("discrepancy_only",      "D_t"),
+    ("target_only", "target-only"),
+    ("global_blend", "global blend"),
+    ("discrepancy_only", "D_t"),
     ("discrepancy_attention", "D_t + A_t"),
-    ("discrepancy_latent",    "D_t - C_t"),
-    ("full_dynamic_mask",     "Full"),
+    ("discrepancy_latent", "D_t - C_t"),
+    ("full_dynamic_mask", "Full"),
 ]
 
 SUMMARY_CANDIDATES = (
@@ -79,49 +80,64 @@ def make_sample_grid(sample_dir: Path) -> np.ndarray | None:
     return grid
 
 
-def make_metric_bar_chart(summary: list[dict], out_path: Path) -> None:
-    methods     = [row["method_name"] for row in summary]
-    clip_scores = [row.get("clip_score_mean") or 0.0 for row in summary]
-    src_lpips   = [row.get("source_lpips_mean") or 0.0 for row in summary]
-    src_psnr    = [row.get("source_psnr_mean") or 0.0 for row in summary]
-    out_lpips   = [row.get("outside_lpips_mean") for row in summary]
-    out_psnr    = [row.get("outside_psnr_mean") for row in summary]
-    locality    = [row.get("locality_ratio_mean") for row in summary]
+def build_metric_specs(summary: list[dict]) -> list[tuple[str, str, bool]]:
+    specs: list[tuple[str, str, bool]] = []
+    if any(row.get("clip_similarity_mean") is not None for row in summary):
+        specs.append(("clip_similarity_mean", "CLIP Similarity", True))
+    specs.append(("clip_score_mean", "CLIPScore", True))
+    if any(row.get("clip_score_edit_part_mean") is not None for row in summary):
+        specs.append(("clip_score_edit_part_mean", "Edit-part CLIPScore", True))
+    specs.extend(
+        [
+            ("source_psnr_mean", "Source PSNR", True),
+            ("source_lpips_mean", "Source LPIPS", False),
+        ]
+    )
+    if any(row.get("outside_lpips_mean") is not None for row in summary):
+        specs.extend(
+            [
+                ("outside_psnr_mean", "Outside PSNR", True),
+                ("outside_mse_mean", "Outside MSE", False),
+                ("outside_ssim_mean", "Outside SSIM", True),
+                ("outside_lpips_mean", "Outside LPIPS", False),
+                ("locality_ratio_mean", "Locality Ratio", True),
+            ]
+        )
+    return [spec for spec in specs if any(row.get(spec[0]) is not None for row in summary)]
 
-    has_masked = any(v is not None for v in out_lpips)
-    n_charts = 6 if has_masked else 3
+
+def make_metric_bar_chart(summary: list[dict], out_path: Path) -> None:
+    methods = [row["method_name"] for row in summary]
+    chart_specs = [
+        ([row.get(key) or 0.0 for row in summary], title, higher_better)
+        for key, title, higher_better in build_metric_specs(summary)
+    ]
+    if not chart_specs:
+        return
+
     x = np.arange(len(methods))
-    fig, axes = plt.subplots(1, n_charts, figsize=(n_charts * 3, 5))
-    if n_charts == 1:
+    fig, axes = plt.subplots(1, len(chart_specs), figsize=(len(chart_specs) * 3, 5))
+    if len(chart_specs) == 1:
         axes = [axes]
     fig.suptitle("Method Comparison", fontsize=13, y=1.01)
 
     colors = plt.cm.tab10(np.linspace(0, 0.6, len(methods)))
 
-    chart_specs = [
-        (clip_scores, "CLIP Score (↑)", True),
-        (src_psnr,    "Source PSNR dB (↑)", True),
-        (src_lpips,   "Source LPIPS (↓)", False),
-    ]
-    if has_masked:
-        chart_specs += [
-            ([v or 0.0 for v in out_psnr],  "Outside PSNR dB (↑)", True),
-            ([v or 0.0 for v in out_lpips], "Outside LPIPS (↓)", False),
-            ([v or 0.0 for v in locality],  "Locality Ratio (↑)", True),
-        ]
-
     for ax, (values, title, higher_better) in zip(axes, chart_specs):
         bars = ax.bar(x, values, color=colors, edgecolor="white", linewidth=0.5)
         ax.set_xticks(x)
         ax.set_xticklabels(methods, rotation=25, ha="right", fontsize=9)
-        ax.set_title(title, fontsize=11)
-        ax.set_ylabel(title.split(" (")[0])
+        ax.set_title(f"{title} ({'up' if higher_better else 'down'})", fontsize=11)
+        ax.set_ylabel(title)
+        value_offset = (max(values) if values else 0.0) * 0.01
         for bar, val in zip(bars, values):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + max(values) * 0.01,
+                bar.get_height() + value_offset,
                 f"{val:.4f}",
-                ha="center", va="bottom", fontsize=7,
+                ha="center",
+                va="bottom",
+                fontsize=7,
             )
         best_idx = int(np.argmax(values) if higher_better else np.argmin(values))
         bars[best_idx].set_edgecolor("red")
@@ -131,21 +147,6 @@ def make_metric_bar_chart(summary: list[dict], out_path: Path) -> None:
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved metric chart -> {out_path}")
-
-
-def build_metric_specs(summary: list[dict]) -> list[tuple[str, str, bool]]:
-    specs = [
-        ("clip_score_mean", "CLIP Score", True),
-        ("source_psnr_mean", "Source PSNR", True),
-        ("source_lpips_mean", "Source LPIPS", False),
-    ]
-    if any(row.get("outside_lpips_mean") is not None for row in summary):
-        specs += [
-            ("outside_psnr_mean", "Outside PSNR", True),
-            ("outside_lpips_mean", "Outside LPIPS", False),
-            ("locality_ratio_mean", "Locality Ratio", True),
-        ]
-    return specs
 
 
 def _metric_sort_value(value: float | None, higher_better: bool) -> float:
@@ -223,15 +224,13 @@ def make_metric_tree_image(summary: list[dict], out_path: Path) -> None:
 
 def make_metric_table_image(summary: list[dict], out_path: Path) -> None:
     methods = [row["method_name"] for row in summary]
-    has_masked = any(row.get("outside_lpips_mean") is not None for row in summary)
+    specs = build_metric_specs(summary)
+    if not specs:
+        return
 
-    cols = ["CLIP Score", "Src PSNR", "Src LPIPS"]
-    keys = ["clip_score_mean", "source_psnr_mean", "source_lpips_mean"]
-    higher = [True, True, False]
-    if has_masked:
-        cols += ["Out PSNR", "Out LPIPS", "Locality"]
-        keys += ["outside_psnr_mean", "outside_lpips_mean", "locality_ratio_mean"]
-        higher += [True, False, True]
+    cols = [title for _, title, _ in specs]
+    keys = [key for key, _, _ in specs]
+    higher = [higher_better for _, _, higher_better in specs]
 
     cell_text = []
     for row in summary:
@@ -279,7 +278,7 @@ def main() -> None:
         raise FileNotFoundError(f"No summary JSON found in {run_dir}")
 
     summary = json.loads(summary_path.read_text(encoding="utf-8"))["summary"]
-    summary = [r for r in summary if r["method_name"] != "phase0_reconstruction"]
+    summary = [row for row in summary if row["method_name"] != "phase0_reconstruction"]
 
     make_metric_tree_image(summary, run_dir / "metric_tree.png")
     make_metric_bar_chart(summary, run_dir / "metric_comparison.png")

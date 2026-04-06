@@ -78,6 +78,7 @@ class MetricConfig:
     enable_clipscore: bool = True
     lpips_net: str = "squeeze"
     clip_local_files_only: bool = True
+    clipscore_text_prefix: str = "A photo depicts"
     strict: bool = False
 
 

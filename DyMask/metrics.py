@@ -8,7 +8,7 @@ import lpips
 import numpy as np
 import torch
 from PIL import Image
-from skimage.metrics import peak_signal_noise_ratio
+from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from transformers import AutoProcessor, CLIPConfig, CLIPModel
 
 from .config import MetricConfig, RuntimeConfig
@@ -21,6 +21,7 @@ class MetricRunner:
         self.metric_config = metric_config
         self.device = "cpu"
         self._lpips_model = None
+        self._lpips_spatial_model = None
         self._clip_model = None
         self._clip_processor = None
 
@@ -31,8 +32,9 @@ class MetricRunner:
         return self._lpips_model
 
     def _lazy_lpips_spatial(self):
-        if not hasattr(self, '_lpips_spatial_model') or self._lpips_spatial_model is None:
-            self._lpips_spatial_model = lpips.LPIPS(net=self.metric_config.lpips_net, spatial=True).to(self.device).eval()
+        if self._lpips_spatial_model is not None:
+            return self._lpips_spatial_model
+        self._lpips_spatial_model = lpips.LPIPS(net=self.metric_config.lpips_net, spatial=True).to(self.device).eval()
         return self._lpips_spatial_model
 
     def _lazy_clip(self):
@@ -103,23 +105,52 @@ class MetricRunner:
         tensor = tensor.permute(2, 0, 1).unsqueeze(0)
         return tensor * 2.0 - 1.0
 
-    def compute_psnr(self, reference: np.ndarray, prediction: np.ndarray) -> float:
-        reference = image_to_numpy(reference)
-        prediction = image_to_numpy(prediction)
-        return float(peak_signal_noise_ratio(reference, prediction, data_range=255))
+    @staticmethod
+    def _normalize_prompt_text(text: str) -> str:
+        return " ".join(str(text).strip().split())
 
-    def compute_lpips(self, reference: np.ndarray, prediction: np.ndarray) -> float | None:
-        if not self.metric_config.enable_lpips:
+    def _clipscore_text(self, text: str) -> str:
+        normalized = self._normalize_prompt_text(text)
+        if not normalized:
+            return normalized
+        prefix = self._normalize_prompt_text(self.metric_config.clipscore_text_prefix)
+        if not prefix:
+            return normalized
+        if normalized.lower().startswith(prefix.lower()):
+            return normalized
+        return f"{prefix} {normalized}"
+
+    @staticmethod
+    def _crop_to_mask_bbox(image: np.ndarray, mask: np.ndarray) -> np.ndarray | None:
+        mask_bool = mask.astype(bool)
+        if not np.any(mask_bool):
             return None
-        model = self._lazy_lpips()
+        ys, xs = np.nonzero(mask_bool)
+        y0, y1 = int(ys.min()), int(ys.max()) + 1
+        x0, x1 = int(xs.min()), int(xs.max()) + 1
+        return image_to_numpy(image)[y0:y1, x0:x1]
+
+    @staticmethod
+    def _outside_mask(mask: np.ndarray) -> np.ndarray:
+        return (mask <= 0).astype(np.float32)
+
+    @staticmethod
+    def _resize_mask_for_spatial_map(mask: np.ndarray, spatial_shape: tuple[int, int], device: str) -> torch.Tensor:
+        import torch.nn.functional as F
+
+        mask_tensor = torch.from_numpy(mask.astype(np.float32)).to(device).unsqueeze(0).unsqueeze(0)
+        if tuple(mask_tensor.shape[-2:]) != tuple(spatial_shape):
+            mask_tensor = F.interpolate(mask_tensor, size=spatial_shape, mode="nearest")
+        return mask_tensor.squeeze(0).squeeze(0)
+
+    def _compute_spatial_lpips_delta(self, reference: np.ndarray, prediction: np.ndarray) -> torch.Tensor:
+        model = self._lazy_lpips_spatial()
         reference_tensor = self._to_lpips_tensor(image_to_numpy(reference)).to(self.device)
         prediction_tensor = self._to_lpips_tensor(image_to_numpy(prediction)).to(self.device)
         with torch.no_grad():
-            return float(model(reference_tensor, prediction_tensor).item())
+            return model(reference_tensor, prediction_tensor)
 
-    def compute_clipscore(self, image: np.ndarray, text: str) -> float | None:
-        if not self.metric_config.enable_clipscore:
-            return None
+    def _clip_image_text_cosine(self, image: np.ndarray, text: str) -> float:
         model, processor = self._lazy_clip()
         clip_inputs = processor(
             text=[text],
@@ -134,47 +165,105 @@ class MetricRunner:
             text_embeds = outputs.text_embeds / outputs.text_embeds.norm(dim=-1, keepdim=True)
         return float((image_embeds * text_embeds).sum(dim=-1).item())
 
-    def compute_psnr_masked(self, reference: np.ndarray, prediction: np.ndarray, mask: np.ndarray) -> float:
-        """PSNR computed only on outside-mask (non-edit) region. mask: H×W uint8, 1=edit region."""
+    def compute_psnr(self, reference: np.ndarray, prediction: np.ndarray) -> float:
+        reference = image_to_numpy(reference)
+        prediction = image_to_numpy(prediction)
+        return float(peak_signal_noise_ratio(reference, prediction, data_range=255))
+
+    def compute_lpips(self, reference: np.ndarray, prediction: np.ndarray) -> float | None:
+        if not self.metric_config.enable_lpips:
+            return None
+        model = self._lazy_lpips()
+        reference_tensor = self._to_lpips_tensor(image_to_numpy(reference)).to(self.device)
+        prediction_tensor = self._to_lpips_tensor(image_to_numpy(prediction)).to(self.device)
+        with torch.no_grad():
+            return float(model(reference_tensor, prediction_tensor).item())
+
+    def compute_clip_similarity(self, image: np.ndarray, text: str) -> float | None:
+        if not self.metric_config.enable_clipscore:
+            return None
+        normalized_text = self._normalize_prompt_text(text)
+        if not normalized_text:
+            return None
+        return self._clip_image_text_cosine(image_to_numpy(image), normalized_text)
+
+    def compute_clipscore(self, image: np.ndarray, text: str) -> float | None:
+        if not self.metric_config.enable_clipscore:
+            return None
+        clipscore_text = self._clipscore_text(text)
+        if not clipscore_text:
+            return None
+        cosine = self._clip_image_text_cosine(image_to_numpy(image), clipscore_text)
+        return float(2.5 * max(cosine, 0.0))
+
+    def compute_clipscore_edit_part(self, image: np.ndarray, text: str, mask: np.ndarray) -> float | None:
+        cropped = self._crop_to_mask_bbox(image_to_numpy(image), mask)
+        if cropped is None:
+            return None
+        return self.compute_clipscore(cropped, text)
+
+    def compute_clip_similarity_edit_part(self, image: np.ndarray, text: str, mask: np.ndarray) -> float | None:
+        cropped = self._crop_to_mask_bbox(image_to_numpy(image), mask)
+        if cropped is None:
+            return None
+        return self.compute_clip_similarity(cropped, text)
+
+    def compute_mse_masked(self, reference: np.ndarray, prediction: np.ndarray, mask: np.ndarray) -> float | None:
         ref = image_to_numpy(reference).astype(np.float32)
         pred = image_to_numpy(prediction).astype(np.float32)
-        outside = (1 - mask.astype(np.float32))  # 1 where NOT edited
-        # zero out edit region in both
-        ref_m = ref * outside[:, :, None]
-        pred_m = pred * outside[:, :, None]
-        mse = np.mean((ref_m - pred_m) ** 2)
+        outside = self._outside_mask(mask)
+        valid_pixels = float(outside.sum())
+        if valid_pixels < 1e-8:
+            return None
+        squared_error = ((ref - pred) ** 2) * outside[:, :, None]
+        return float(squared_error.sum() / (valid_pixels * ref.shape[2]))
+
+    def compute_psnr_masked(self, reference: np.ndarray, prediction: np.ndarray, mask: np.ndarray) -> float | None:
+        mse = self.compute_mse_masked(reference, prediction, mask)
+        if mse is None:
+            return None
         if mse < 1e-10:
             return 100.0
         return float(10.0 * np.log10((255.0 ** 2) / mse))
 
-    def compute_lpips_masked(self, reference: np.ndarray, prediction: np.ndarray, mask: np.ndarray) -> float | None:
-        """LPIPS computed only on outside-mask region. mask: H×W uint8, 1=edit region."""
-        if not self.metric_config.enable_lpips:
+    def compute_ssim_masked(self, reference: np.ndarray, prediction: np.ndarray, mask: np.ndarray) -> float | None:
+        ref = image_to_numpy(reference)
+        pred = image_to_numpy(prediction)
+        outside = self._outside_mask(mask)
+        if float(outside.sum()) < 1e-8:
             return None
-        model = self._lazy_lpips()
-        ref_t = self._to_lpips_tensor(image_to_numpy(reference)).to(self.device)
-        pred_t = self._to_lpips_tensor(image_to_numpy(prediction)).to(self.device)
-        outside = torch.from_numpy((1 - mask.astype(np.float32))).to(self.device).unsqueeze(0).unsqueeze(0)
-        ref_t = ref_t * outside
-        pred_t = pred_t * outside
-        with torch.no_grad():
-            return float(model(ref_t, pred_t).item())
+        _, ssim_map = structural_similarity(ref, pred, data_range=255, channel_axis=2, full=True)
+        if ssim_map.ndim == 3:
+            ssim_map = ssim_map.mean(axis=2)
+        return float((ssim_map.astype(np.float32) * outside).sum() / outside.sum())
 
-    def compute_locality_ratio(self, source_image: np.ndarray, edited_image: np.ndarray, mask: np.ndarray) -> float | None:
-        """Locality ratio: Change_in / (Change_in + Change_out) using LPIPS spatial map."""
+    def compute_lpips_masked(
+        self,
+        reference: np.ndarray,
+        prediction: np.ndarray,
+        mask: np.ndarray,
+        spatial_delta: torch.Tensor | None = None,
+    ) -> float | None:
         if not self.metric_config.enable_lpips:
             return None
-        import torch.nn.functional as F
-        model = self._lazy_lpips_spatial()
-        src_t = self._to_lpips_tensor(image_to_numpy(source_image)).to(self.device)
-        edit_t = self._to_lpips_tensor(image_to_numpy(edited_image)).to(self.device)
-        with torch.no_grad():
-            delta = model(src_t, edit_t)  # [1, 1, H, W]
-        mask_t = torch.from_numpy(mask.astype(np.float32)).to(self.device)  # [H, W]
-        if delta.shape[-2:] != mask_t.shape:
-            mask_t_4d = mask_t.unsqueeze(0).unsqueeze(0)
-            mask_t_4d = F.interpolate(mask_t_4d, size=delta.shape[-2:], mode='nearest')
-            mask_t = mask_t_4d.squeeze(0).squeeze(0)
+        delta = spatial_delta if spatial_delta is not None else self._compute_spatial_lpips_delta(reference, prediction)
+        outside = self._resize_mask_for_spatial_map(self._outside_mask(mask), tuple(delta.shape[-2:]), self.device)
+        denom = float(outside.sum().item())
+        if denom < 1e-8:
+            return None
+        return float((delta.squeeze() * outside).sum().item() / denom)
+
+    def compute_locality_ratio(
+        self,
+        source_image: np.ndarray,
+        edited_image: np.ndarray,
+        mask: np.ndarray,
+        spatial_delta: torch.Tensor | None = None,
+    ) -> float | None:
+        if not self.metric_config.enable_lpips:
+            return None
+        delta = spatial_delta if spatial_delta is not None else self._compute_spatial_lpips_delta(source_image, edited_image)
+        mask_t = self._resize_mask_for_spatial_map(mask.astype(np.float32), tuple(delta.shape[-2:]), self.device)
         change_in = float((delta.squeeze() * mask_t).sum().item())
         change_out = float((delta.squeeze() * (1.0 - mask_t)).sum().item())
         denom = change_in + change_out
@@ -202,8 +291,10 @@ class MetricRunner:
                 metrics["source_recon_lpips_error"] = str(exc)
         if self.metric_config.enable_clipscore:
             try:
+                metrics["clip_similarity"] = self.compute_clip_similarity(edited_image, target_text)
                 metrics["clip_score"] = self.compute_clipscore(edited_image, target_text)
             except Exception as exc:
+                metrics["clip_similarity"] = None
                 metrics["clip_score"] = None
                 metrics["clip_score_error"] = str(exc)
 
@@ -228,28 +319,52 @@ class MetricRunner:
                 metrics["edit_ref_lpips"] = None
                 metrics["edit_ref_lpips_error"] = str(exc)
 
-        # Masked metrics (PIE-Bench gt_mask)
+        metrics["outside_mse"] = None
         metrics["outside_psnr"] = None
+        metrics["outside_ssim"] = None
         metrics["outside_lpips"] = None
         metrics["locality_ratio"] = None
+        metrics["clip_score_edit_part"] = None
+        metrics["clip_similarity_edit_part"] = None
         if gt_mask is not None:
+            if self.metric_config.enable_clipscore:
+                try:
+                    metrics["clip_score_edit_part"] = self.compute_clipscore_edit_part(edited_image, target_text, gt_mask)
+                    metrics["clip_similarity_edit_part"] = self.compute_clip_similarity_edit_part(edited_image, target_text, gt_mask)
+                except Exception as exc:
+                    metrics["clip_score_edit_part"] = None
+                    metrics["clip_similarity_edit_part"] = None
+                    metrics["clip_score_edit_part_error"] = str(exc)
+
+            metrics["outside_mse"] = self.compute_mse_masked(source_image, edited_image, gt_mask)
             if self.metric_config.enable_psnr:
                 metrics["outside_psnr"] = self.compute_psnr_masked(source_image, edited_image, gt_mask)
+                metrics["outside_ssim"] = self.compute_ssim_masked(source_image, edited_image, gt_mask)
             if self.metric_config.enable_lpips:
+                spatial_delta = None
                 try:
-                    metrics["outside_lpips"] = self.compute_lpips_masked(source_image, edited_image, gt_mask)
+                    spatial_delta = self._compute_spatial_lpips_delta(source_image, edited_image)
+                    metrics["outside_lpips"] = self.compute_lpips_masked(
+                        source_image,
+                        edited_image,
+                        gt_mask,
+                        spatial_delta=spatial_delta,
+                    )
                 except Exception as exc:
                     metrics["outside_lpips"] = None
                     metrics["outside_lpips_error"] = str(exc)
                 try:
-                    metrics["locality_ratio"] = self.compute_locality_ratio(source_image, edited_image, gt_mask)
+                    if spatial_delta is None:
+                        spatial_delta = self._compute_spatial_lpips_delta(source_image, edited_image)
+                    metrics["locality_ratio"] = self.compute_locality_ratio(
+                        source_image,
+                        edited_image,
+                        gt_mask,
+                        spatial_delta=spatial_delta,
+                    )
                 except Exception as exc:
                     metrics["locality_ratio"] = None
                     metrics["locality_ratio_error"] = str(exc)
-        elif self.metric_config.enable_psnr:
-            # fallback: whole-image (existing behavior already captured in edit_source_psnr/lpips)
-            metrics["outside_psnr"] = metrics.get("edit_source_psnr")
-            metrics["outside_lpips"] = metrics.get("edit_source_lpips")
         return metrics
 
     def summarize(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
