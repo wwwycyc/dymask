@@ -6,3 +6,7 @@ PnPI
 samples
 recomputed_metrics
 .cache
+scratch_factorized_runs
+scratch_graph_attention_runs
+scratch_revocable_runs
+scratch_combo_runs
