@@ -25563,3 +25563,6006 @@
 ```
 结论：当前阶段的可视化、指标、日志和样本留存已齐备。
 下一步：按顺序进入下一阶段，而不是一次性堆叠所有模块。
+
+## 2026-04-03 04:16
+阶段：数据准备
+操作：加载 PIE-Bench 数据集
+输入：
+```json
+{
+  "piebench_path": "assets\\PIE-Bench"
+}
+```
+结果：
+```json
+{
+  "dataset": "PIE-Bench",
+  "path": "assets\\PIE-Bench"
+}
+```
+结论：已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。
+下一步：抽样并固化 sample manifest。
+
+## 2026-04-03 04:16
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 8,
+  "sample_seed": 42,
+  "row_indices": [
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370
+  ],
+  "phase": "custom",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416",
+  "manifest_json": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-04-03 04:18
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "source_prompt": "a wathet bird sitting on a branch [of yellow flowers]",
+  "edit_prompt": "Remove yellow flowers from the branch",
+  "target_prompt": "a wathet bird sitting on a branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_000_pie_311000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_000_pie_311000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_000_pie_311000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_000_pie_311000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_000_pie_311000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "source_prompt": "a girl in red dress standing in a field [surrounded by balloons]",
+  "edit_prompt": "Remove balloons in the field",
+  "target_prompt": "a girl in red dress standing in a field",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_001_pie_312000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_001_pie_312000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_001_pie_312000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_001_pie_312000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_001_pie_312000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "source_prompt": "a cartoon illustration of two plants [with faces]",
+  "edit_prompt": "Remove the faces from the plants",
+  "target_prompt": "a cartoon illustration of two plants",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_002_pie_313000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_002_pie_313000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_002_pie_313000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_002_pie_313000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_002_pie_313000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "source_prompt": "a house with [lightning and] rain on it",
+  "edit_prompt": "Remove the lightning",
+  "target_prompt": "a house with rain on it",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_003_pie_314000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_003_pie_314000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_003_pie_314000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_003_pie_314000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_003_pie_314000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "source_prompt": "[a bee flies over] a flowering tree branch",
+  "edit_prompt": "Remove the bee flying over the flowering tree branch",
+  "target_prompt": "a flowering tree branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_004_pie_321000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_004_pie_321000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_004_pie_321000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_004_pie_321000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_004_pie_321000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "source_prompt": "a woman in a trench coat sitting at a table [with a cell phone]",
+  "edit_prompt": "Remove the cell phone",
+  "target_prompt": "a woman in a trench coat sitting at a table",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_005_pie_322000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_005_pie_322000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_005_pie_322000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_005_pie_322000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_005_pie_322000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "source_prompt": "a cup of coffee on a table with [coffee beans and] a coffee grinder",
+  "edit_prompt": "Remove the coffee beans",
+  "target_prompt": "a cup of coffee on a table with a coffee grinder",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_006_pie_323000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_006_pie_323000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_006_pie_323000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_006_pie_323000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_006_pie_323000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "source_prompt": "[a single pink lotus flower is growing in the middle of] a large green leaf",
+  "edit_prompt": "remove the pink lotus flower",
+  "target_prompt": "a large green leaf",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_007_pie_324000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:19
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_007_pie_324000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_007_pie_324000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_007_pie_324000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\samples\\sample_007_pie_324000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:19
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 8,
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\metrics_summary.json",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\overview_all_samples.png",
+  "variant_json": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0416\\variant.json"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：用同一批 sample 对比基线 run_v1 与 source_prompt 变体。
+
+## 2026-04-03 04:24
+阶段：数据准备
+操作：加载 PIE-Bench 数据集
+输入：
+```json
+{
+  "piebench_path": "assets\\PIE-Bench"
+}
+```
+结果：
+```json
+{
+  "dataset": "PIE-Bench",
+  "path": "assets\\PIE-Bench"
+}
+```
+结论：已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。
+下一步：抽样并固化 sample manifest。
+
+## 2026-04-03 04:24
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 8,
+  "sample_seed": 42,
+  "row_indices": [
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370
+  ],
+  "phase": "custom",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424",
+  "manifest_json": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "source_prompt": "a wathet bird sitting on a branch [of yellow flowers]",
+  "edit_prompt": "Remove yellow flowers from the branch",
+  "target_prompt": "a wathet bird sitting on a branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_000_pie_311000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_000_pie_311000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_000_pie_311000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_000_pie_311000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_000_pie_311000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "source_prompt": "a girl in red dress standing in a field [surrounded by balloons]",
+  "edit_prompt": "Remove balloons in the field",
+  "target_prompt": "a girl in red dress standing in a field",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_001_pie_312000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_001_pie_312000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_001_pie_312000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_001_pie_312000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_001_pie_312000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "source_prompt": "a cartoon illustration of two plants [with faces]",
+  "edit_prompt": "Remove the faces from the plants",
+  "target_prompt": "a cartoon illustration of two plants",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_002_pie_313000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_002_pie_313000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_002_pie_313000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_002_pie_313000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_002_pie_313000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "source_prompt": "a house with [lightning and] rain on it",
+  "edit_prompt": "Remove the lightning",
+  "target_prompt": "a house with rain on it",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_003_pie_314000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_003_pie_314000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_003_pie_314000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_003_pie_314000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_003_pie_314000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "source_prompt": "[a bee flies over] a flowering tree branch",
+  "edit_prompt": "Remove the bee flying over the flowering tree branch",
+  "target_prompt": "a flowering tree branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_004_pie_321000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_004_pie_321000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_004_pie_321000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_004_pie_321000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_004_pie_321000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "source_prompt": "a woman in a trench coat sitting at a table [with a cell phone]",
+  "edit_prompt": "Remove the cell phone",
+  "target_prompt": "a woman in a trench coat sitting at a table",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_005_pie_322000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_005_pie_322000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_005_pie_322000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_005_pie_322000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_005_pie_322000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "source_prompt": "a cup of coffee on a table with [coffee beans and] a coffee grinder",
+  "edit_prompt": "Remove the coffee beans",
+  "target_prompt": "a cup of coffee on a table with a coffee grinder",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_006_pie_323000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_006_pie_323000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_006_pie_323000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_006_pie_323000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_006_pie_323000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "source_prompt": "[a single pink lotus flower is growing in the middle of] a large green leaf",
+  "edit_prompt": "remove the pink lotus flower",
+  "target_prompt": "a large green leaf",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_007_pie_324000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 04:30
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_007_pie_324000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_007_pie_324000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_007_pie_324000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\samples\\sample_007_pie_324000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 04:30
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 8,
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\metrics_summary.json",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\overview_all_samples.png",
+  "variant_json": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260403-0424\\variant.json"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：用同一批 sample 对比基线 run_v1 与 source_prompt 变体。
+
+## 2026-04-03 06:10
+阶段：数据准备
+操作：加载 PIE-Bench 数据集
+输入：
+```json
+{
+  "piebench_path": "assets\\PIE-Bench"
+}
+```
+结果：
+```json
+{
+  "dataset": "PIE-Bench",
+  "path": "assets\\PIE-Bench"
+}
+```
+结论：已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。
+下一步：抽样并固化 sample manifest。
+
+## 2026-04-03 06:10
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 8,
+  "sample_seed": 42,
+  "row_indices": [
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370
+  ],
+  "phase": "custom",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1\\v1_20260403-0610",
+  "manifest_json": "runs\\dymask_v1\\v1_20260403-0610\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1\\v1_20260403-0610\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-04-03 06:12
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "source_prompt": "a wathet bird sitting on a branch [of yellow flowers]",
+  "edit_prompt": "Remove yellow flowers from the branch",
+  "target_prompt": "a wathet bird sitting on a branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_000_pie_311000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_000_pie_311000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_000_pie_311000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_000_pie_311000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_000_pie_311000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "source_prompt": "a girl in red dress standing in a field [surrounded by balloons]",
+  "edit_prompt": "Remove balloons in the field",
+  "target_prompt": "a girl in red dress standing in a field",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_001_pie_312000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_001_pie_312000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_001_pie_312000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_001_pie_312000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_001_pie_312000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "source_prompt": "a cartoon illustration of two plants [with faces]",
+  "edit_prompt": "Remove the faces from the plants",
+  "target_prompt": "a cartoon illustration of two plants",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_002_pie_313000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_002_pie_313000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_002_pie_313000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_002_pie_313000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_002_pie_313000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "source_prompt": "a house with [lightning and] rain on it",
+  "edit_prompt": "Remove the lightning",
+  "target_prompt": "a house with rain on it",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_003_pie_314000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_003_pie_314000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_003_pie_314000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_003_pie_314000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_003_pie_314000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "source_prompt": "[a bee flies over] a flowering tree branch",
+  "edit_prompt": "Remove the bee flying over the flowering tree branch",
+  "target_prompt": "a flowering tree branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_004_pie_321000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_004_pie_321000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_004_pie_321000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_004_pie_321000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_004_pie_321000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "source_prompt": "a woman in a trench coat sitting at a table [with a cell phone]",
+  "edit_prompt": "Remove the cell phone",
+  "target_prompt": "a woman in a trench coat sitting at a table",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_005_pie_322000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_005_pie_322000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_005_pie_322000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_005_pie_322000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_005_pie_322000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "source_prompt": "a cup of coffee on a table with [coffee beans and] a coffee grinder",
+  "edit_prompt": "Remove the coffee beans",
+  "target_prompt": "a cup of coffee on a table with a coffee grinder",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_006_pie_323000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_006_pie_323000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_006_pie_323000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_006_pie_323000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_006_pie_323000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "source_prompt": "[a single pink lotus flower is growing in the middle of] a large green leaf",
+  "edit_prompt": "remove the pink lotus flower",
+  "target_prompt": "a large green leaf",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_007_pie_324000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:13
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_007_pie_324000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_007_pie_324000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_007_pie_324000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0610\\samples\\sample_007_pie_324000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:13
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 8,
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1\\v1_20260403-0610\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1\\v1_20260403-0610\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1\\v1_20260403-0610\\metrics_summary.json",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1\\v1_20260403-0610\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1\\v1_20260403-0610\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1\\v1_20260403-0610\\overview_all_samples.png"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：按顺序进入下一阶段，而不是一次性堆叠所有模块。
+
+## 2026-04-03 06:23
+阶段：数据准备
+操作：加载 PIE-Bench 数据集
+输入：
+```json
+{
+  "piebench_path": "assets\\PIE-Bench"
+}
+```
+结果：
+```json
+{
+  "dataset": "PIE-Bench",
+  "path": "assets\\PIE-Bench"
+}
+```
+结论：已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。
+下一步：抽样并固化 sample manifest。
+
+## 2026-04-03 06:23
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 8,
+  "sample_seed": 42,
+  "row_indices": [
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370
+  ],
+  "phase": "custom",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1\\v1_20260403-0623",
+  "manifest_json": "runs\\dymask_v1\\v1_20260403-0623\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1\\v1_20260403-0623\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-04-03 06:25
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "source_prompt": "a wathet bird sitting on a branch [of yellow flowers]",
+  "edit_prompt": "Remove yellow flowers from the branch",
+  "target_prompt": "a wathet bird sitting on a branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_000_pie_311000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_000_pie_311000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_000_pie_311000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_000_pie_311000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_000_pie_311000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "source_prompt": "a girl in red dress standing in a field [surrounded by balloons]",
+  "edit_prompt": "Remove balloons in the field",
+  "target_prompt": "a girl in red dress standing in a field",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_001_pie_312000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_001_pie_312000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_001_pie_312000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_001_pie_312000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_001_pie_312000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "source_prompt": "a cartoon illustration of two plants [with faces]",
+  "edit_prompt": "Remove the faces from the plants",
+  "target_prompt": "a cartoon illustration of two plants",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_002_pie_313000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_002_pie_313000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_002_pie_313000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_002_pie_313000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_002_pie_313000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "source_prompt": "a house with [lightning and] rain on it",
+  "edit_prompt": "Remove the lightning",
+  "target_prompt": "a house with rain on it",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_003_pie_314000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_003_pie_314000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_003_pie_314000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_003_pie_314000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_003_pie_314000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "source_prompt": "[a bee flies over] a flowering tree branch",
+  "edit_prompt": "Remove the bee flying over the flowering tree branch",
+  "target_prompt": "a flowering tree branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_004_pie_321000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_004_pie_321000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_004_pie_321000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_004_pie_321000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_004_pie_321000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "source_prompt": "a woman in a trench coat sitting at a table [with a cell phone]",
+  "edit_prompt": "Remove the cell phone",
+  "target_prompt": "a woman in a trench coat sitting at a table",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_005_pie_322000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_005_pie_322000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_005_pie_322000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_005_pie_322000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_005_pie_322000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "source_prompt": "a cup of coffee on a table with [coffee beans and] a coffee grinder",
+  "edit_prompt": "Remove the coffee beans",
+  "target_prompt": "a cup of coffee on a table with a coffee grinder",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_006_pie_323000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_006_pie_323000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_006_pie_323000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_006_pie_323000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_006_pie_323000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "source_prompt": "[a single pink lotus flower is growing in the middle of] a large green leaf",
+  "edit_prompt": "remove the pink lotus flower",
+  "target_prompt": "a large green leaf",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_007_pie_324000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 06:26
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_007_pie_324000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_007_pie_324000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_007_pie_324000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260403-0623\\samples\\sample_007_pie_324000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 06:26
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 8,
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1\\v1_20260403-0623\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1\\v1_20260403-0623\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1\\v1_20260403-0623\\metrics_summary.json",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1\\v1_20260403-0623\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1\\v1_20260403-0623\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1\\v1_20260403-0623\\overview_all_samples.png"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：按顺序进入下一阶段，而不是一次性堆叠所有模块。
+
+## 2026-04-03 17:38
+阶段：数据准备
+操作：加载 PIE-Bench 数据集
+输入：
+```json
+{
+  "piebench_path": "assets\\PIE-Bench"
+}
+```
+结果：
+```json
+{
+  "dataset": "PIE-Bench",
+  "path": "assets\\PIE-Bench"
+}
+```
+结论：已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。
+下一步：抽样并固化 sample manifest。
+
+## 2026-04-03 17:38
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 8,
+  "sample_seed": 42,
+  "row_indices": [
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370
+  ],
+  "phase": "custom",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1738",
+  "manifest_json": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-04-03 17:40
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "source_prompt": "a wathet bird sitting on a branch [of yellow flowers]",
+  "edit_prompt": "Remove yellow flowers from the branch",
+  "target_prompt": "a wathet bird sitting on a branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_000_pie_311000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_000_pie_311000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_000_pie_311000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_000_pie_311000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_000_pie_311000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "source_prompt": "a girl in red dress standing in a field [surrounded by balloons]",
+  "edit_prompt": "Remove balloons in the field",
+  "target_prompt": "a girl in red dress standing in a field",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_001_pie_312000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_001_pie_312000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_001_pie_312000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_001_pie_312000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_001_pie_312000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "source_prompt": "a cartoon illustration of two plants [with faces]",
+  "edit_prompt": "Remove the faces from the plants",
+  "target_prompt": "a cartoon illustration of two plants",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_002_pie_313000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_002_pie_313000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_002_pie_313000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_002_pie_313000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_002_pie_313000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "source_prompt": "a house with [lightning and] rain on it",
+  "edit_prompt": "Remove the lightning",
+  "target_prompt": "a house with rain on it",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_003_pie_314000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_003_pie_314000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_003_pie_314000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_003_pie_314000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_003_pie_314000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "source_prompt": "[a bee flies over] a flowering tree branch",
+  "edit_prompt": "Remove the bee flying over the flowering tree branch",
+  "target_prompt": "a flowering tree branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_004_pie_321000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_004_pie_321000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_004_pie_321000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_004_pie_321000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_004_pie_321000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "source_prompt": "a woman in a trench coat sitting at a table [with a cell phone]",
+  "edit_prompt": "Remove the cell phone",
+  "target_prompt": "a woman in a trench coat sitting at a table",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_005_pie_322000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_005_pie_322000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_005_pie_322000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_005_pie_322000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_005_pie_322000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "source_prompt": "a cup of coffee on a table with [coffee beans and] a coffee grinder",
+  "edit_prompt": "Remove the coffee beans",
+  "target_prompt": "a cup of coffee on a table with a coffee grinder",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_006_pie_323000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_006_pie_323000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_006_pie_323000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_006_pie_323000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_006_pie_323000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "source_prompt": "[a single pink lotus flower is growing in the middle of] a large green leaf",
+  "edit_prompt": "remove the pink lotus flower",
+  "target_prompt": "a large green leaf",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_007_pie_324000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 17:41
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_007_pie_324000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_007_pie_324000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_007_pie_324000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\samples\\sample_007_pie_324000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 17:41
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 8,
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\metrics_summary.json",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1_bgblend\\v1_20260403-1738\\overview_all_samples.png"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：按顺序进入下一阶段，而不是一次性堆叠所有模块。
+
+## 2026-04-03 18:55
+阶段：数据准备
+操作：加载 PIE-Bench 数据集
+输入：
+```json
+{
+  "piebench_path": "assets\\PIE-Bench"
+}
+```
+结果：
+```json
+{
+  "dataset": "PIE-Bench",
+  "path": "assets\\PIE-Bench"
+}
+```
+结论：已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。
+下一步：抽样并固化 sample manifest。
+
+## 2026-04-03 18:55
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 8,
+  "sample_seed": 42,
+  "row_indices": [
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370
+  ],
+  "phase": "custom",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1855",
+  "manifest_json": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-04-03 18:57
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "source_prompt": "a wathet bird sitting on a branch [of yellow flowers]",
+  "edit_prompt": "Remove yellow flowers from the branch",
+  "target_prompt": "a wathet bird sitting on a branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_000_pie_311000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_000_pie_311000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_000_pie_311000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_000_pie_311000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_000_pie_311000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "source_prompt": "a girl in red dress standing in a field [surrounded by balloons]",
+  "edit_prompt": "Remove balloons in the field",
+  "target_prompt": "a girl in red dress standing in a field",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_001_pie_312000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_001_pie_312000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_001_pie_312000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_001_pie_312000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_001_pie_312000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "source_prompt": "a cartoon illustration of two plants [with faces]",
+  "edit_prompt": "Remove the faces from the plants",
+  "target_prompt": "a cartoon illustration of two plants",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_002_pie_313000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_002_pie_313000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_002_pie_313000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_002_pie_313000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_002_pie_313000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "source_prompt": "a house with [lightning and] rain on it",
+  "edit_prompt": "Remove the lightning",
+  "target_prompt": "a house with rain on it",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_003_pie_314000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_003_pie_314000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_003_pie_314000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_003_pie_314000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_003_pie_314000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "source_prompt": "[a bee flies over] a flowering tree branch",
+  "edit_prompt": "Remove the bee flying over the flowering tree branch",
+  "target_prompt": "a flowering tree branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_004_pie_321000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_004_pie_321000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_004_pie_321000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_004_pie_321000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_004_pie_321000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "source_prompt": "a woman in a trench coat sitting at a table [with a cell phone]",
+  "edit_prompt": "Remove the cell phone",
+  "target_prompt": "a woman in a trench coat sitting at a table",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_005_pie_322000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_005_pie_322000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_005_pie_322000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_005_pie_322000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_005_pie_322000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "source_prompt": "a cup of coffee on a table with [coffee beans and] a coffee grinder",
+  "edit_prompt": "Remove the coffee beans",
+  "target_prompt": "a cup of coffee on a table with a coffee grinder",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_006_pie_323000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_006_pie_323000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_006_pie_323000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_006_pie_323000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_006_pie_323000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "source_prompt": "[a single pink lotus flower is growing in the middle of] a large green leaf",
+  "edit_prompt": "remove the pink lotus flower",
+  "target_prompt": "a large green leaf",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_007_pie_324000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 18:58
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_007_pie_324000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_007_pie_324000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_007_pie_324000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\samples\\sample_007_pie_324000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 18:58
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 8,
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\metrics_summary.json",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1_bgblend\\v1_20260403-1855\\overview_all_samples.png"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：按顺序进入下一阶段，而不是一次性堆叠所有模块。
+
+## 2026-04-03 19:59
+阶段：数据准备
+操作：加载 PIE-Bench 数据集
+输入：
+```json
+{
+  "piebench_path": "assets\\PIE-Bench"
+}
+```
+结果：
+```json
+{
+  "dataset": "PIE-Bench",
+  "path": "assets\\PIE-Bench"
+}
+```
+结论：已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。
+下一步：抽样并固化 sample manifest。
+
+## 2026-04-03 19:59
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 8,
+  "sample_seed": 42,
+  "row_indices": [
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370
+  ],
+  "phase": "custom",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1959",
+  "manifest_json": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-04-03 20:01
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "source_prompt": "a wathet bird sitting on a branch [of yellow flowers]",
+  "edit_prompt": "Remove yellow flowers from the branch",
+  "target_prompt": "a wathet bird sitting on a branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_000_pie_311000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_000_pie_311000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_000_pie_311000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_000_pie_311000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_000_pie_311000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "source_prompt": "a girl in red dress standing in a field [surrounded by balloons]",
+  "edit_prompt": "Remove balloons in the field",
+  "target_prompt": "a girl in red dress standing in a field",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_001_pie_312000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_001_pie_312000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_001_pie_312000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_001_pie_312000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_001_pie_312000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "source_prompt": "a cartoon illustration of two plants [with faces]",
+  "edit_prompt": "Remove the faces from the plants",
+  "target_prompt": "a cartoon illustration of two plants",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_002_pie_313000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_002_pie_313000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_002_pie_313000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_002_pie_313000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_002_pie_313000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "source_prompt": "a house with [lightning and] rain on it",
+  "edit_prompt": "Remove the lightning",
+  "target_prompt": "a house with rain on it",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_003_pie_314000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_003_pie_314000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_003_pie_314000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_003_pie_314000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_003_pie_314000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "source_prompt": "[a bee flies over] a flowering tree branch",
+  "edit_prompt": "Remove the bee flying over the flowering tree branch",
+  "target_prompt": "a flowering tree branch",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_004_pie_321000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_004_pie_321000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_004_pie_321000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_004_pie_321000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_004_pie_321000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "source_prompt": "a woman in a trench coat sitting at a table [with a cell phone]",
+  "edit_prompt": "Remove the cell phone",
+  "target_prompt": "a woman in a trench coat sitting at a table",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_005_pie_322000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_005_pie_322000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_005_pie_322000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_005_pie_322000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_005_pie_322000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "source_prompt": "a cup of coffee on a table with [coffee beans and] a coffee grinder",
+  "edit_prompt": "Remove the coffee beans",
+  "target_prompt": "a cup of coffee on a table with a coffee grinder",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_006_pie_323000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_006_pie_323000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_006_pie_323000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_006_pie_323000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_006_pie_323000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "source_prompt": "[a single pink lotus flower is growing in the middle of] a large green leaf",
+  "edit_prompt": "remove the pink lotus flower",
+  "target_prompt": "a large green leaf",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_007_pie_324000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-03 20:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_007_pie_324000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_007_pie_324000000000\\discrepancy_latent\\edited.png",
+    "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_007_pie_324000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\samples\\sample_007_pie_324000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-03 20:02
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 8,
+  "methods": [
+    "discrepancy_latent",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\metrics_summary.json",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1_bgblend\\v1_20260403-1959\\overview_all_samples.png"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：按顺序进入下一阶段，而不是一次性堆叠所有模块。
+
+## 2026-04-04 12:15
+阶段：数据准备
+操作：加载 PIE-Bench 数据集
+输入：
+```json
+{
+  "piebench_path": "assets\\PIE-Bench"
+}
+```
+结果：
+```json
+{
+  "dataset": "PIE-Bench",
+  "path": "assets\\PIE-Bench"
+}
+```
+结论：已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。
+下一步：抽样并固化 sample manifest。
+
+## 2026-04-04 12:15
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 8,
+  "sample_seed": 42,
+  "row_indices": [
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370
+  ],
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1\\v1_20260404-1215",
+  "manifest_json": "runs\\dymask_v1\\v1_20260404-1215\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1\\v1_20260404-1215\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "source_prompt": "a wathet bird sitting on a branch [of yellow flowers]",
+  "edit_prompt": "Remove yellow flowers from the branch",
+  "target_prompt": "a wathet bird sitting on a branch",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_000_pie_311000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_000_pie_311000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_000_pie_311000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_000_pie_311000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_000_pie_311000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "source_prompt": "a girl in red dress standing in a field [surrounded by balloons]",
+  "edit_prompt": "Remove balloons in the field",
+  "target_prompt": "a girl in red dress standing in a field",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_001_pie_312000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_001_pie_312000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_001_pie_312000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_001_pie_312000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_001_pie_312000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "source_prompt": "a cartoon illustration of two plants [with faces]",
+  "edit_prompt": "Remove the faces from the plants",
+  "target_prompt": "a cartoon illustration of two plants",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_002_pie_313000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_002_pie_313000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_002_pie_313000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_002_pie_313000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_002_pie_313000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "source_prompt": "a house with [lightning and] rain on it",
+  "edit_prompt": "Remove the lightning",
+  "target_prompt": "a house with rain on it",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_003_pie_314000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_003_pie_314000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_003_pie_314000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_003_pie_314000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_003_pie_314000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "source_prompt": "[a bee flies over] a flowering tree branch",
+  "edit_prompt": "Remove the bee flying over the flowering tree branch",
+  "target_prompt": "a flowering tree branch",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_004_pie_321000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_004_pie_321000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_004_pie_321000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_004_pie_321000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_004_pie_321000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "source_prompt": "a woman in a trench coat sitting at a table [with a cell phone]",
+  "edit_prompt": "Remove the cell phone",
+  "target_prompt": "a woman in a trench coat sitting at a table",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_005_pie_322000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_005_pie_322000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_005_pie_322000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_005_pie_322000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_005_pie_322000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "source_prompt": "a cup of coffee on a table with [coffee beans and] a coffee grinder",
+  "edit_prompt": "Remove the coffee beans",
+  "target_prompt": "a cup of coffee on a table with a coffee grinder",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_006_pie_323000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_006_pie_323000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_006_pie_323000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_006_pie_323000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_006_pie_323000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "source_prompt": "[a single pink lotus flower is growing in the middle of] a large green leaf",
+  "edit_prompt": "remove the pink lotus flower",
+  "target_prompt": "a large green leaf",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_007_pie_324000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:18
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_007_pie_324000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_007_pie_324000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_007_pie_324000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1215\\samples\\sample_007_pie_324000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:18
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 8,
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1\\v1_20260404-1215\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1\\v1_20260404-1215\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1\\v1_20260404-1215\\metrics_summary.json",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1\\v1_20260404-1215\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1\\v1_20260404-1215\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1\\v1_20260404-1215\\overview_all_samples.png"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：按顺序进入下一阶段，而不是一次性堆叠所有模块。
+
+## 2026-04-04 12:47
+阶段：数据准备
+操作：加载 PIE-Bench 数据集
+输入：
+```json
+{
+  "piebench_path": "assets\\PIE-Bench"
+}
+```
+结果：
+```json
+{
+  "dataset": "PIE-Bench",
+  "path": "assets\\PIE-Bench"
+}
+```
+结论：已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。
+下一步：抽样并固化 sample manifest。
+
+## 2026-04-04 12:47
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 8,
+  "sample_seed": 42,
+  "row_indices": [
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370
+  ],
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1\\v1_20260404-1247",
+  "manifest_json": "runs\\dymask_v1\\v1_20260404-1247\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1\\v1_20260404-1247\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-04-04 12:49
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "source_prompt": "a wathet bird sitting on a branch [of yellow flowers]",
+  "edit_prompt": "Remove yellow flowers from the branch",
+  "target_prompt": "a wathet bird sitting on a branch",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_000_pie_311000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_000_pie_311000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_000_pie_311000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_000_pie_311000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_000_pie_311000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "source_prompt": "a girl in red dress standing in a field [surrounded by balloons]",
+  "edit_prompt": "Remove balloons in the field",
+  "target_prompt": "a girl in red dress standing in a field",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_001_pie_312000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_001_pie_312000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_001_pie_312000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_001_pie_312000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_001_pie_312000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "source_prompt": "a cartoon illustration of two plants [with faces]",
+  "edit_prompt": "Remove the faces from the plants",
+  "target_prompt": "a cartoon illustration of two plants",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_002_pie_313000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_002_pie_313000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_002_pie_313000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_002_pie_313000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_002_pie_313000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "source_prompt": "a house with [lightning and] rain on it",
+  "edit_prompt": "Remove the lightning",
+  "target_prompt": "a house with rain on it",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_003_pie_314000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_003_pie_314000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_003_pie_314000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_003_pie_314000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_003_pie_314000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "source_prompt": "[a bee flies over] a flowering tree branch",
+  "edit_prompt": "Remove the bee flying over the flowering tree branch",
+  "target_prompt": "a flowering tree branch",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_004_pie_321000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_004_pie_321000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_004_pie_321000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_004_pie_321000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_004_pie_321000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "source_prompt": "a woman in a trench coat sitting at a table [with a cell phone]",
+  "edit_prompt": "Remove the cell phone",
+  "target_prompt": "a woman in a trench coat sitting at a table",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_005_pie_322000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_005_pie_322000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_005_pie_322000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_005_pie_322000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_005_pie_322000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "source_prompt": "a cup of coffee on a table with [coffee beans and] a coffee grinder",
+  "edit_prompt": "Remove the coffee beans",
+  "target_prompt": "a cup of coffee on a table with a coffee grinder",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_006_pie_323000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_006_pie_323000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_006_pie_323000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_006_pie_323000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_006_pie_323000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "source_prompt": "[a single pink lotus flower is growing in the middle of] a large green leaf",
+  "edit_prompt": "remove the pink lotus flower",
+  "target_prompt": "a large green leaf",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_007_pie_324000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 12:50
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "phase": "custom"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_007_pie_324000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_007_pie_324000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_007_pie_324000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1\\v1_20260404-1247\\samples\\sample_007_pie_324000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 12:50
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 8,
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1\\v1_20260404-1247\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1\\v1_20260404-1247\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1\\v1_20260404-1247\\metrics_summary.json",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1\\v1_20260404-1247\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1\\v1_20260404-1247\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1\\v1_20260404-1247\\overview_all_samples.png"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：按顺序进入下一阶段，而不是一次性堆叠所有模块。
+
+## 2026-04-04 13:58
+阶段：source_prompt_stagewise
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_stagewise\\v1_source_prompt_stagewise_20260404-1358",
+  "static_mask_steps": 5,
+  "stage_split_ratio": 0.5
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000"
+  ]
+}
+```
+结论：samples and variant config saved
+下一步：run inversion and editing
+
+## 2026-04-04 13:58
+阶段：source_prompt_stagewise
+操作：finish run
+输入：
+```json
+{
+  "run_dir": "runs\\dymask_v1_source_prompt_stagewise\\v1_source_prompt_stagewise_20260404-1358",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "static_mask_steps": 5,
+  "stage_split_ratio": 0.5
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_source_prompt_stagewise\\v1_source_prompt_stagewise_20260404-1358\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1_source_prompt_stagewise\\v1_source_prompt_stagewise_20260404-1358\\metrics_summary.csv",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1_source_prompt_stagewise\\v1_source_prompt_stagewise_20260404-1358\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1_source_prompt_stagewise\\v1_source_prompt_stagewise_20260404-1358\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1_source_prompt_stagewise\\v1_source_prompt_stagewise_20260404-1358\\overview_all_samples.png"
+}
+```
+结论：stagewise source-prompt run completed
+下一步：compare against source-prompt baseline
+
+## 2026-04-04 13:59
+阶段：数据准备
+操作：加载 PIE-Bench 数据集
+输入：
+```json
+{
+  "piebench_path": "assets\\PIE-Bench"
+}
+```
+结果：
+```json
+{
+  "dataset": "PIE-Bench",
+  "path": "assets\\PIE-Bench"
+}
+```
+结论：已确认 PIE-Bench 数据集，将使用 GT mask 计算 masked 指标。
+下一步：抽样并固化 sample manifest。
+
+## 2026-04-04 13:59
+阶段：样本抽样
+操作：生成样本清单并导出缓存图片
+输入：
+```json
+{
+  "sample_count": 8,
+  "sample_seed": 42,
+  "row_indices": [
+    300,
+    310,
+    320,
+    330,
+    340,
+    350,
+    360,
+    370
+  ],
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ]
+}
+```
+结果：
+```json
+{
+  "run_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359",
+  "manifest_json": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\sample_manifest.json",
+  "manifest_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\sample_manifest.csv",
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结论：样本清单已冻结，后续所有阶段应复用同一批样本。
+下一步：根据 phase 进入分阶段验证。
+
+## 2026-04-04 14:01
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "source_prompt": "a wathet bird sitting on a branch [of yellow flowers]",
+  "edit_prompt": "Remove yellow flowers from the branch",
+  "target_prompt": "a wathet bird sitting on a branch",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_000_pie_311000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_000_pie_311000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_000_pie_311000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_000_pie_311000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_000_pie_311000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_000_pie_311000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "source_prompt": "a girl in red dress standing in a field [surrounded by balloons]",
+  "edit_prompt": "Remove balloons in the field",
+  "target_prompt": "a girl in red dress standing in a field",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_001_pie_312000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_001_pie_312000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_001_pie_312000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_001_pie_312000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_001_pie_312000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_001_pie_312000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "source_prompt": "a cartoon illustration of two plants [with faces]",
+  "edit_prompt": "Remove the faces from the plants",
+  "target_prompt": "a cartoon illustration of two plants",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_002_pie_313000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_002_pie_313000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_002_pie_313000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_002_pie_313000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_002_pie_313000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_002_pie_313000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "source_prompt": "a house with [lightning and] rain on it",
+  "edit_prompt": "Remove the lightning",
+  "target_prompt": "a house with rain on it",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_003_pie_314000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_003_pie_314000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_003_pie_314000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_003_pie_314000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_003_pie_314000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_003_pie_314000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "source_prompt": "[a bee flies over] a flowering tree branch",
+  "edit_prompt": "Remove the bee flying over the flowering tree branch",
+  "target_prompt": "a flowering tree branch",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_004_pie_321000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_004_pie_321000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_004_pie_321000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_004_pie_321000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_004_pie_321000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_004_pie_321000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "source_prompt": "a woman in a trench coat sitting at a table [with a cell phone]",
+  "edit_prompt": "Remove the cell phone",
+  "target_prompt": "a woman in a trench coat sitting at a table",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_005_pie_322000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_005_pie_322000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_005_pie_322000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_005_pie_322000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_005_pie_322000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_005_pie_322000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "source_prompt": "a cup of coffee on a table with [coffee beans and] a coffee grinder",
+  "edit_prompt": "Remove the coffee beans",
+  "target_prompt": "a cup of coffee on a table with a coffee grinder",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_006_pie_323000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_006_pie_323000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_006_pie_323000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_006_pie_323000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_006_pie_323000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_006_pie_323000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：开始执行单样本阶段验证
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "source_prompt": "[a single pink lotus flower is growing in the middle of] a large green leaf",
+  "edit_prompt": "remove the pink lotus flower",
+  "target_prompt": "a large green leaf",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "sample_dir": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_007_pie_324000000000"
+}
+```
+结论：进入反演与阶段方法运行。
+下一步：保存 reconstruction、方法结果和指标。
+
+## 2026-04-04 14:02
+阶段：Custom 多方法运行
+操作：单样本阶段验证完成
+输入：
+```json
+{
+  "sample_id": "sample_007_pie_324000000000",
+  "phase": "custom",
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "reconstruction_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_007_pie_324000000000\\source_reconstruction.png",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "artifacts": [
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_007_pie_324000000000\\discrepancy_only\\edited.png",
+    "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_007_pie_324000000000\\full_dynamic_mask\\edited.png"
+  ],
+  "overview_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\samples\\sample_007_pie_324000000000\\overview.png"
+}
+```
+结论：该样本已保存固定产物和阶段产物，可进入下一样本或汇总。
+下一步：继续剩余样本，或检查 summary 指标和中间图。
+
+## 2026-04-04 14:02
+阶段：实验汇总
+操作：落盘阶段 case-level 与 summary 指标
+输入：
+```json
+{
+  "phase": "custom",
+  "run_limit": 8,
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "variant": "source_prompt_v1"
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\metrics_summary.csv",
+  "summary_metrics_json": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\metrics_summary.json",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\overview_all_samples.png",
+  "variant_json": "runs\\dymask_v1_source_prompt\\v1_source_prompt_20260404-1359\\variant.json"
+}
+```
+结论：当前阶段的可视化、指标、日志和样本留存已齐备。
+下一步：用同一批 sample 对比基线 run_v1 与 source_prompt 变体。
+
+## 2026-04-04 14:15
+阶段：source_prompt_stagewise
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_stagewise\\v1_source_prompt_stagewise_20260404-1415",
+  "static_mask_steps": 5,
+  "stage_split_ratio": 0.5
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：samples and variant config saved
+下一步：run inversion and editing
+
+## 2026-04-04 14:22
+阶段：source_prompt_stagewise
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_stagewise\\v1_source_prompt_stagewise_20260404-1422",
+  "static_mask_steps": 5,
+  "stage_split_ratio": 0.5
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：samples and variant config saved
+下一步：run inversion and editing
+
+## 2026-04-04 16:57
+阶段：source_prompt_diffedit_roi
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_diffedit_roi\\v1_source_prompt_diffedit_roi_20260404-1657",
+  "stage_split_ratio": 0.5,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000"
+  ]
+}
+```
+结论：samples and variant config saved
+下一步：run inversion and editing
+
+## 2026-04-04 17:00
+阶段：source_prompt_diffedit_roi
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_diffedit_roi\\v1_source_prompt_diffedit_roi_20260404-1700",
+  "stage_split_ratio": 0.5,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000"
+  ]
+}
+```
+结论：samples and variant config saved
+下一步：run inversion and editing
+
+## 2026-04-04 17:04
+阶段：source_prompt_diffedit_roi
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_diffedit_roi\\v1_source_prompt_diffedit_roi_20260404-1704",
+  "stage_split_ratio": 0.5,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000"
+  ]
+}
+```
+结论：samples and variant config saved
+下一步：run inversion and editing
+
+## 2026-04-04 17:11
+阶段：source_prompt_diffedit_roi
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_diffedit_roi\\v1_source_prompt_diffedit_roi_20260404-1711",
+  "stage_split_ratio": 0.5,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：samples and variant config saved
+下一步：run inversion and editing
+
+## 2026-04-04 17:17
+阶段：source_prompt_diffedit_roi
+操作：finish run
+输入：
+```json
+{
+  "run_dir": "runs\\dymask_v1_source_prompt_diffedit_roi\\v1_source_prompt_diffedit_roi_20260404-1711",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "stage_split_ratio": 0.5,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_source_prompt_diffedit_roi\\v1_source_prompt_diffedit_roi_20260404-1711\\metrics_case_level.csv",
+  "summary_metrics_csv": "runs\\dymask_v1_source_prompt_diffedit_roi\\v1_source_prompt_diffedit_roi_20260404-1711\\metrics_summary.csv",
+  "overview_method_case_metrics_csv": "runs\\dymask_v1_source_prompt_diffedit_roi\\v1_source_prompt_diffedit_roi_20260404-1711\\metrics_overview_methods_case_level.csv",
+  "overview_method_summary_metrics_csv": "runs\\dymask_v1_source_prompt_diffedit_roi\\v1_source_prompt_diffedit_roi_20260404-1711\\metrics_overview_methods_summary.csv",
+  "overview_all_samples_path": "runs\\dymask_v1_source_prompt_diffedit_roi\\v1_source_prompt_diffedit_roi_20260404-1711\\overview_all_samples.png"
+}
+```
+结论：source-prompt diffedit-roi run completed
+下一步：compare against source-prompt and diffedit baselines
+
+## 2026-04-04 23:51
+阶段：source_prompt_hard_roi_locked
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_hard_roi_locked\\v1_source_prompt_hard_roi_locked_20260404-2351",
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：samples and variant config saved
+下一步：run inversion and editing
+
+## 2026-04-05 10:10
+阶段：source_prompt_hard_roi_locked
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_hard_roi_locked\\v1_source_prompt_hard_roi_locked_20260405-1010",
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：samples and variant config saved
+下一步：run inversion and editing
+
+## 2026-04-05 18:01
+阶段：source_prompt_temporal_support
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1801",
+  "support_rho": 0.85,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：samples and temporal-support variant config saved
+下一步：run inversion and editing
+
+## 2026-04-05 18:13
+阶段：source_prompt_temporal_support
+操作：complete run
+输入：
+```json
+{
+  "run_dir": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1801"
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1801\\metrics_case_level.csv",
+  "summary_csv": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1801\\metrics_summary.csv"
+}
+```
+结论：temporal-support prompt run finished
+下一步：inspect summary tables and support-state diagnostics
+
+## 2026-04-05 18:22
+阶段：source_prompt_temporal_support
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1822",
+  "support_rho": 0.7,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：samples and temporal-support variant config saved
+下一步：run inversion and editing
+
+## 2026-04-05 18:35
+阶段：source_prompt_temporal_support
+操作：complete run
+输入：
+```json
+{
+  "run_dir": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1822"
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1822\\metrics_case_level.csv",
+  "summary_csv": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1822\\metrics_summary.csv"
+}
+```
+结论：temporal-support prompt run finished
+下一步：inspect summary tables and support-state diagnostics
+
+## 2026-04-05 18:40
+阶段：source_prompt_temporal_support
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1840",
+  "support_rho": 0.95,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：samples and temporal-support variant config saved
+下一步：run inversion and editing
+
+## 2026-04-05 18:53
+阶段：source_prompt_temporal_support
+操作：complete run
+输入：
+```json
+{
+  "run_dir": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1840"
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1840\\metrics_case_level.csv",
+  "summary_csv": "D:\\Program\\dymask\\runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260405-1840\\metrics_summary.csv"
+}
+```
+结论：temporal-support prompt run finished
+下一步：inspect summary tables and support-state diagnostics
+
+## 2026-04-06 06:05
+阶段：source_prompt_validated_support
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0605",
+  "support_rho": 0.7,
+  "support_lambda": 0.5,
+  "support_kappa": 8.0,
+  "support_alpha": 8.0,
+  "support_delta": 0.35,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000"
+  ]
+}
+```
+结论：samples and validated-support variant config saved
+下一步：run inversion and editing
+
+## 2026-04-06 06:07
+阶段：source_prompt_validated_support
+操作：complete run
+输入：
+```json
+{
+  "run_dir": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0605"
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0605\\metrics_case_level.csv",
+  "summary_csv": null
+}
+```
+结论：validated-support prompt run finished
+下一步：inspect summary tables and support-validation diagnostics
+
+## 2026-04-06 06:08
+阶段：source_prompt_validated_support
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "discrepancy_only",
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0608",
+  "support_rho": 0.7,
+  "support_lambda": 0.5,
+  "support_kappa": 8.0,
+  "support_alpha": 8.0,
+  "support_delta": 0.35,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_311000000000",
+    "sample_001_pie_312000000000",
+    "sample_002_pie_313000000000",
+    "sample_003_pie_314000000000",
+    "sample_004_pie_321000000000",
+    "sample_005_pie_322000000000",
+    "sample_006_pie_323000000000",
+    "sample_007_pie_324000000000"
+  ]
+}
+```
+结论：samples and validated-support variant config saved
+下一步：run inversion and editing
+
+## 2026-04-06 06:21
+阶段：source_prompt_validated_support
+操作：complete run
+输入：
+```json
+{
+  "run_dir": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0608"
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0608\\metrics_case_level.csv",
+  "summary_csv": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0608\\metrics_summary.csv"
+}
+```
+结论：validated-support prompt run finished
+下一步：inspect summary tables and support-validation diagnostics
+
+## 2026-04-06 08:07
+阶段：source_prompt_temporal_support
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260406-0807",
+  "support_rho": 0.7,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_000000000006",
+    "sample_001_pie_000000000026",
+    "sample_002_pie_000000000028",
+    "sample_003_pie_000000000035",
+    "sample_004_pie_000000000057",
+    "sample_005_pie_000000000062",
+    "sample_006_pie_000000000070",
+    "sample_007_pie_000000000139"
+  ]
+}
+```
+结论：samples and temporal-support variant config saved
+下一步：run inversion and editing
+
+## 2026-04-06 08:14
+阶段：source_prompt_temporal_support
+操作：complete run
+输入：
+```json
+{
+  "run_dir": "runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260406-0807"
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260406-0807\\metrics_case_level.csv",
+  "summary_csv": "runs\\dymask_v1_source_prompt_temporal_support\\v1_source_prompt_temporal_support_20260406-0807\\metrics_summary.csv"
+}
+```
+结论：temporal-support prompt run finished
+下一步：inspect summary tables and support-state diagnostics
+
+## 2026-04-06 08:18
+阶段：source_prompt_validated_support
+操作：prepare run
+输入：
+```json
+{
+  "phase": "custom",
+  "methods": [
+    "full_dynamic_mask"
+  ],
+  "run_dir": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0818",
+  "support_rho": 0.7,
+  "support_lambda": 0.5,
+  "support_kappa": 8.0,
+  "support_alpha": 8.0,
+  "support_delta": 0.35,
+  "diffedit": {
+    "num_maps_per_mask": 10,
+    "mask_encode_strength": 0.5,
+    "mask_thresholding_ratio": 3.0,
+    "inpaint_strength": 1.0
+  }
+}
+```
+结果：
+```json
+{
+  "sample_ids": [
+    "sample_000_pie_000000000006",
+    "sample_001_pie_000000000026",
+    "sample_002_pie_000000000028",
+    "sample_003_pie_000000000035",
+    "sample_004_pie_000000000057",
+    "sample_005_pie_000000000062",
+    "sample_006_pie_000000000070",
+    "sample_007_pie_000000000139"
+  ]
+}
+```
+结论：samples and validated-support variant config saved
+下一步：run inversion and editing
+
+## 2026-04-06 08:24
+阶段：source_prompt_validated_support
+操作：complete run
+输入：
+```json
+{
+  "run_dir": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0818"
+}
+```
+结果：
+```json
+{
+  "case_metrics_csv": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0818\\metrics_case_level.csv",
+  "summary_csv": "runs\\dymask_v1_source_prompt_validated_support\\v1_source_prompt_validated_support_20260406-0818\\metrics_summary.csv"
+}
+```
+结论：validated-support prompt run finished
+下一步：inspect summary tables and support-validation diagnostics

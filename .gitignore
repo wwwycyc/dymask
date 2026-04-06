@@ -4,3 +4,5 @@ NTIP2P
 DyMask/__pycache__
 PnPI
 samples
+recomputed_metrics
+.cache
