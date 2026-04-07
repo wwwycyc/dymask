@@ -45,13 +45,13 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--attention-graph-steps", type=int, default=2)
     args = parser.parse_args(argv_list)
     if not _has_output_root_arg(argv_list):
-        args.output_root = "scratch_source_anchor_graph_runs/dymask_v1_source_prompt_source_anchored_graph_refined_attention"
+        args.output_root = "scratch_source_anchor_graph_runs/sp_gr_anchor"
 
     config = build_config(args)
     run_prefix = (
-        f"{config.phase}_source_prompt_source_anchored_graph_refined_attention"
+        f"{config.phase}_sp_gr_anchor"
         if config.phase != "custom"
-        else "v1_source_prompt_source_anchored_graph_refined_attention"
+        else "sp_gr_anchor"
     )
     run_dir = make_timestamped_run_dir(config.sampling.output_root, prefix=run_prefix)
     logger = MarkdownExperimentLogger(Path("log_source_anchored_graph_refined_attention.md"))
