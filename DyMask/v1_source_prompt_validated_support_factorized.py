@@ -64,6 +64,17 @@ class V1SourcePromptValidatedSupportFactorizedEditor(V1SourcePromptHardRoiLocked
             return evidence
         return self.support_rho * previous_state + (1.0 - self.support_rho) * evidence
 
+    def _post_scheduler_step_latents(
+        self,
+        method_name: str,
+        prev_latents: torch.Tensor,
+        roi_mask: torch.Tensor | None,
+        source_latents: list[torch.Tensor],
+        step_idx: int,
+        total_steps: int,
+    ) -> torch.Tensor:
+        return prev_latents
+
     def _support_consistent_map(
         self,
         method_name: str,
@@ -201,6 +212,14 @@ class V1SourcePromptValidatedSupportFactorizedEditor(V1SourcePromptHardRoiLocked
                 effective_mask = self._effective_mask_from_state(support_state)
                 eps = eps_src + effective_mask * (eps_tar - eps_src)
             probe_latents = self.pipe.scheduler.step(eps, timestep, latents).prev_sample
+            probe_latents = self._post_scheduler_step_latents(
+                method_name=method_name,
+                prev_latents=probe_latents,
+                roi_mask=roi_mask,
+                source_latents=source_latents,
+                step_idx=0,
+                total_steps=total_steps,
+            )
             _ = self._decode_latents_batch(probe_latents)
         finally:
             self.attention_store.reset()
@@ -344,7 +363,14 @@ class V1SourcePromptValidatedSupportFactorizedEditor(V1SourcePromptHardRoiLocked
             gamma_t = builder.latent_weight_for_step(step_idx=step_idx, total_steps=total_steps)
 
             scheduler_output = self.pipe.scheduler.step(eps, timestep, latents)
-            latents = scheduler_output.prev_sample
+            latents = self._post_scheduler_step_latents(
+                method_name=method_name,
+                prev_latents=scheduler_output.prev_sample,
+                roi_mask=roi_mask,
+                source_latents=source_latents,
+                step_idx=step_idx,
+                total_steps=total_steps,
+            )
 
             for sample_idx in range(batch_size):
                 delta = float(delta_values[sample_idx]) if sample_idx < len(delta_values) else float(target_stats["delta"])
