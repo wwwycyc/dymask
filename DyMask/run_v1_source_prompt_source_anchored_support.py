@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> None:
         else "v1_source_prompt_source_anchored_support"
     )
     run_dir = make_timestamped_run_dir(config.sampling.output_root, prefix=run_prefix)
-    logger = MarkdownExperimentLogger(Path("log.md"))
+    logger = MarkdownExperimentLogger(Path("log_source_anchored_support.md"))
     diffedit_config = DiffEditConfig(
         num_maps_per_mask=args.num_maps_per_mask,
         mask_encode_strength=args.mask_encode_strength,
