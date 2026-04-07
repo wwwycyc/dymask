@@ -59,6 +59,23 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
     ) -> torch.Tensor:
         return prev_latents
 
+    def _step_latents_from_mask(
+        self,
+        method_name: str,
+        latents: torch.Tensor,
+        timestep: torch.Tensor,
+        eps_src: torch.Tensor,
+        eps_tar: torch.Tensor,
+        effective_mask: torch.Tensor,
+        roi_mask: torch.Tensor | None,
+        source_latents: list[torch.Tensor],
+        step_idx: int,
+        total_steps: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        eps = eps_src + effective_mask * (eps_tar - eps_src)
+        prev_latents = self.pipe.scheduler.step(eps, timestep, latents).prev_sample
+        return eps, prev_latents
+
     @torch.no_grad()
     def _probe_method_batch_memory(
         self,
@@ -144,8 +161,20 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                     total_steps=total_steps,
                 )
                 effective_mask = self._update_support_state(None, support_evidence)
-                eps = eps_src + effective_mask * (eps_tar - eps_src)
-            probe_latents = self.pipe.scheduler.step(eps, timestep, latents).prev_sample
+                eps, probe_latents = self._step_latents_from_mask(
+                    method_name=method_name,
+                    latents=latents,
+                    timestep=timestep,
+                    eps_src=eps_src,
+                    eps_tar=eps_tar,
+                    effective_mask=effective_mask,
+                    roi_mask=roi_mask,
+                    source_latents=source_latents,
+                    step_idx=0,
+                    total_steps=total_steps,
+                )
+            if method_name == "target_only":
+                probe_latents = self.pipe.scheduler.step(eps, timestep, latents).prev_sample
             probe_latents = self._post_scheduler_step_latents(
                 method_name=method_name,
                 prev_latents=probe_latents,
@@ -266,7 +295,18 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                 aux_tensor["support_evidence"] = support_evidence
                 aux_tensor["support_state"] = support_state
                 aux_tensor["mask"] = effective_mask
-                eps = eps_src + effective_mask * (eps_tar - eps_src)
+                eps, prev_latents = self._step_latents_from_mask(
+                    method_name=method_name,
+                    latents=latents,
+                    timestep=timestep,
+                    eps_src=eps_src,
+                    eps_tar=eps_tar,
+                    effective_mask=effective_mask,
+                    roi_mask=roi_mask,
+                    source_latents=source_latents,
+                    step_idx=step_idx,
+                    total_steps=total_steps,
+                )
 
             delta_values = target_stats.get("delta_per_sample", [])
             mean_delta = float(sum(delta_values) / len(delta_values)) if delta_values else float(target_stats["delta"])
@@ -279,10 +319,11 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
             blend_strength = torch.where(src_tar_gap > 1e-8, applied_gap / src_tar_gap, torch.zeros_like(applied_gap))
             gamma_t = builder.latent_weight_for_step(step_idx=step_idx, total_steps=total_steps)
 
-            scheduler_output = self.pipe.scheduler.step(eps, timestep, latents)
+            if method_name == "target_only":
+                prev_latents = self.pipe.scheduler.step(eps, timestep, latents).prev_sample
             latents = self._post_scheduler_step_latents(
                 method_name=method_name,
-                prev_latents=scheduler_output.prev_sample,
+                prev_latents=prev_latents,
                 roi_mask=roi_mask,
                 source_latents=source_latents,
                 step_idx=step_idx,
