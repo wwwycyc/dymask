@@ -48,6 +48,12 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
             return evidence
         return self.support_rho * previous_state + (1.0 - self.support_rho) * evidence
 
+    def _prepare_source_attention_pass(self, step_idx: int, total_steps: int) -> None:
+        self.attention_store.reset()
+
+    def _prepare_target_attention_pass(self, step_idx: int, total_steps: int) -> None:
+        self.attention_store.reset()
+
     def _post_scheduler_step_latents(
         self,
         method_name: str,
@@ -126,9 +132,9 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
         timestep = self.pipe.scheduler.timesteps[0]
         total_steps = len(self.pipe.scheduler.timesteps)
         try:
-            self.attention_store.reset()
+            self._prepare_source_attention_pass(step_idx=0, total_steps=total_steps)
             eps_src = self.source_predictor.predict(latents, timestep, source_embeddings)
-            self.attention_store.reset()
+            self._prepare_target_attention_pass(step_idx=0, total_steps=total_steps)
             eps_tar, target_noise, _noise_uncond, _target_stats = self.target_predictor.predict(
                 latents,
                 timestep,
@@ -243,9 +249,9 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
 
         for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
             source_latent = source_latents[step_idx]
-            self.attention_store.reset()
+            self._prepare_source_attention_pass(step_idx=step_idx, total_steps=total_steps)
             eps_src = self.source_predictor.predict(latents, timestep, source_embeddings)
-            self.attention_store.reset()
+            self._prepare_target_attention_pass(step_idx=step_idx, total_steps=total_steps)
             eps_tar, target_noise, _noise_uncond, target_stats = self.target_predictor.predict(
                 latents,
                 timestep,
