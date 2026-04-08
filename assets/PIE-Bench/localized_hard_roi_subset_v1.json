@@ -1,0 +1,164 @@
+{
+  "subset_id": "localized_hard_roi_subset_v1",
+  "purpose": "PIE-Bench subset better matched to hard-ROI and source-anchored localized editing. Excludes background/style/global-field tasks and favors medium-area object-centric edits.",
+  "selection_rules": {
+    "included_folders": [
+      "1_change_object_80",
+      "2_add_object_80",
+      "3_delete_object_80",
+      "4_change_attribute_content_40",
+      "5_change_attribute_pose_40",
+      "6_change_attribute_color_40",
+      "7_change_attribute_material_40"
+    ],
+    "excluded_folders": [
+      "8_change_background_80",
+      "9_change_style_80"
+    ],
+    "preference": [
+      "object-centric localized edits",
+      "medium GT mask area",
+      "avoid obvious field/global scene changes"
+    ]
+  },
+  "smoke_8_row_indices": [
+    165,
+    275,
+    346,
+    411,
+    440,
+    468,
+    510,
+    162
+  ],
+  "balanced_14_row_indices": [
+    165,
+    162,
+    262,
+    275,
+    346,
+    360,
+    411,
+    409,
+    440,
+    423,
+    468,
+    490,
+    510,
+    521
+  ],
+  "samples": [
+    {
+      "row_index": 165,
+      "key": "113000000005",
+      "image_path": "1_change_object_80/1_artificial/3_indoor/113000000005.jpg",
+      "task_family": "change_object",
+      "gt_area_ratio": 0.1214,
+      "editing_instruction": "Change the chair to a table"
+    },
+    {
+      "row_index": 162,
+      "key": "113000000002",
+      "image_path": "1_change_object_80/1_artificial/3_indoor/113000000002.jpg",
+      "task_family": "change_object",
+      "gt_area_ratio": 0.1293,
+      "editing_instruction": "Replace the vase with a plant"
+    },
+    {
+      "row_index": 262,
+      "key": "221000000002",
+      "image_path": "2_add_object_80/2_natural/1_animal/221000000002.jpg",
+      "task_family": "add_object",
+      "gt_area_ratio": 0.1414,
+      "editing_instruction": "make the cat wear a hat"
+    },
+    {
+      "row_index": 275,
+      "key": "222000000005",
+      "image_path": "2_add_object_80/2_natural/2_human/222000000005.jpg",
+      "task_family": "add_object",
+      "gt_area_ratio": 0.0956,
+      "editing_instruction": "Add a turban to the man"
+    },
+    {
+      "row_index": 346,
+      "key": "321000000006",
+      "image_path": "3_delete_object_80/2_natural/1_animal/321000000006.jpg",
+      "task_family": "delete_object",
+      "gt_area_ratio": 0.128,
+      "editing_instruction": "Remove the seal pup from the beach"
+    },
+    {
+      "row_index": 360,
+      "key": "323000000000",
+      "image_path": "3_delete_object_80/2_natural/3_indoor/323000000000.jpg",
+      "task_family": "delete_object",
+      "gt_area_ratio": 0.1363,
+      "editing_instruction": "Remove the coffee beans"
+    },
+    {
+      "row_index": 411,
+      "key": "423000000001",
+      "image_path": "4_change_attribute_content_40/2_natural/3_indoor/423000000001.jpg",
+      "task_family": "change_attribute_content",
+      "gt_area_ratio": 0.108,
+      "editing_instruction": "Change the mug to a glass"
+    },
+    {
+      "row_index": 409,
+      "key": "422000000004",
+      "image_path": "4_change_attribute_content_40/2_natural/2_human/422000000004.jpg",
+      "task_family": "change_attribute_content",
+      "gt_area_ratio": 0.1488,
+      "editing_instruction": "Make the man angry"
+    },
+    {
+      "row_index": 440,
+      "key": "521000000000",
+      "image_path": "5_change_attribute_pose_40/2_natural/1_animal/521000000000.jpg",
+      "task_family": "change_attribute_pose",
+      "gt_area_ratio": 0.1092,
+      "editing_instruction": "make the dog look at camera"
+    },
+    {
+      "row_index": 423,
+      "key": "511000000003",
+      "image_path": "5_change_attribute_pose_40/1_artificial/1_animal/511000000003.jpg",
+      "task_family": "change_attribute_pose",
+      "gt_area_ratio": 0.1086,
+      "editing_instruction": "Change the position of the hummingbird's wings to be folded"
+    },
+    {
+      "row_index": 468,
+      "key": "612000000003",
+      "image_path": "6_change_attribute_color_40/1_artificial/2_human/612000000003.jpg",
+      "task_family": "change_attribute_color",
+      "gt_area_ratio": 0.1426,
+      "editing_instruction": "Change the color of the umbrella from pink to yellow"
+    },
+    {
+      "row_index": 490,
+      "key": "623000000000",
+      "image_path": "6_change_attribute_color_40/2_natural/3_indoor/623000000000.jpg",
+      "task_family": "change_attribute_color",
+      "gt_area_ratio": 0.1782,
+      "editing_instruction": "Change the color of the tea cup to white"
+    },
+    {
+      "row_index": 510,
+      "key": "713000000000",
+      "image_path": "7_change_attribute_material_40/1_artificial/3_indoor/713000000000.jpg",
+      "task_family": "change_attribute_material",
+      "gt_area_ratio": 0.0896,
+      "editing_instruction": "Make the chairs plastic"
+    },
+    {
+      "row_index": 521,
+      "key": "721000000001",
+      "image_path": "7_change_attribute_material_40/2_natural/1_animal/721000000001.jpg",
+      "task_family": "change_attribute_material",
+      "gt_area_ratio": 0.1507,
+      "editing_instruction": "change the robin to a silver robin sculpture"
+    }
+  ]
+}
