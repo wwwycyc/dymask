@@ -54,6 +54,16 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
     def _prepare_target_attention_pass(self, step_idx: int, total_steps: int) -> None:
         self.attention_store.reset()
 
+    def _initialize_edit_latents(
+        self,
+        method_name: str,
+        latents: torch.Tensor,
+        roi_mask: torch.Tensor | None,
+        source_latents: list[torch.Tensor],
+        total_steps: int,
+    ) -> torch.Tensor:
+        return latents
+
     def _post_scheduler_step_latents(
         self,
         method_name: str,
@@ -146,6 +156,14 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                 for sample, condition in zip(samples, target_conditions)
             ],
             dim=0,
+        )
+        total_steps = len(self.pipe.scheduler.timesteps)
+        latents = self._initialize_edit_latents(
+            method_name=method_name,
+            latents=latents,
+            roi_mask=roi_mask,
+            source_latents=source_latents,
+            total_steps=total_steps,
         )
         target_embeddings = torch.cat(
             [condition.embeddings.to(self.pipe.device, dtype=self.pipe.unet.dtype) for condition in target_conditions],
@@ -260,6 +278,14 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
             ],
             dim=0,
         )
+        total_steps = len(self.pipe.scheduler.timesteps)
+        latents = self._initialize_edit_latents(
+            method_name=method_name,
+            latents=latents,
+            roi_mask=roi_mask,
+            source_latents=source_latents,
+            total_steps=total_steps,
+        )
         target_embeddings = torch.cat(
             [condition.embeddings.to(self.pipe.device, dtype=self.pipe.unet.dtype) for condition in target_conditions],
             dim=0,
@@ -272,7 +298,6 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
 
         aux_histories: list[list[dict[str, np.ndarray]]] = [[] for _ in range(batch_size)]
         trace_histories: list[list[dict[str, float | int | str]]] = [[] for _ in range(batch_size)]
-        total_steps = len(self.pipe.scheduler.timesteps)
         support_state: torch.Tensor | None = None
 
         for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
