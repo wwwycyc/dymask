@@ -49,6 +49,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--transform-discrepancy-weight", type=float, default=1.0)
     parser.add_argument("--transform-attention-weight", type=float, default=1.0)
     parser.add_argument("--preservation-latent-weight", type=float, default=1.0)
+    parser.add_argument("--preservation-use-transform-gate", action="store_true")
+    parser.add_argument("--preservation-transform-gate-power", type=float, default=1.0)
     args = parser.parse_args(argv_list)
     if not _has_output_root_arg(argv_list):
         args.output_root = "scratch_dual_field_runs/sp_dual_field"
@@ -76,6 +78,8 @@ def main(argv: list[str] | None = None) -> None:
             "transform_discrepancy_weight": args.transform_discrepancy_weight,
             "transform_attention_weight": args.transform_attention_weight,
             "preservation_latent_weight": args.preservation_latent_weight,
+            "preservation_use_transform_gate": bool(args.preservation_use_transform_gate),
+            "preservation_transform_gate_power": args.preservation_transform_gate_power,
             "effective_mask_formula": {
                 "full": "M_t = roi_mask * T_t * (1 - P_t)",
                 "transform_only": "M_t = roi_mask * T_t",
@@ -134,6 +138,8 @@ def main(argv: list[str] | None = None) -> None:
         transform_discrepancy_weight=args.transform_discrepancy_weight,
         transform_attention_weight=args.transform_attention_weight,
         preservation_latent_weight=args.preservation_latent_weight,
+        preservation_use_transform_gate=args.preservation_use_transform_gate,
+        preservation_transform_gate_power=args.preservation_transform_gate_power,
         diffedit_config=diffedit_config,
         inversion_backend=inversion_backend,
     )

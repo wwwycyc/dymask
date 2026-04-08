@@ -21,6 +21,8 @@ class V1SourcePromptSourceAnchoredDualFieldEditor(V1SourcePromptSourceAnchoredHa
         transform_discrepancy_weight: float = 1.0,
         transform_attention_weight: float = 1.0,
         preservation_latent_weight: float = 1.0,
+        preservation_use_transform_gate: bool = False,
+        preservation_transform_gate_power: float = 1.0,
         diffedit_config=None,
         inversion_backend=None,
     ) -> None:
@@ -39,6 +41,8 @@ class V1SourcePromptSourceAnchoredDualFieldEditor(V1SourcePromptSourceAnchoredHa
         )
         self.preservation_config = PreservationFieldConfig(
             latent_weight=float(preservation_latent_weight),
+            use_transform_gate=bool(preservation_use_transform_gate),
+            transform_gate_power=float(preservation_transform_gate_power),
         )
 
     def _reference_prompt_metadata(self, sample: MaterializedSample) -> dict[str, object]:
@@ -50,6 +54,8 @@ class V1SourcePromptSourceAnchoredDualFieldEditor(V1SourcePromptSourceAnchoredHa
                 "dual_field_mode": self.dual_field_mode,
                 "transformation_formula": "T_t = (w_d * D_t + w_a * A_t) / (w_d + w_a)",
                 "preservation_formula": "P_t = clamp(w_c * C_t, 0, 1)",
+                "preservation_transform_gate": self.preservation_config.use_transform_gate,
+                "preservation_transform_gate_power": self.preservation_config.transform_gate_power,
                 "effective_mask_formula": {
                     "full": "M_t = roi_mask * T_t * (1 - P_t)",
                     "transform_only": "M_t = roi_mask * T_t",
@@ -103,6 +109,7 @@ class V1SourcePromptSourceAnchoredDualFieldEditor(V1SourcePromptSourceAnchoredHa
         preservation_field = build_preservation_field(
             latent_drift=aux_tensor["latent_drift"],
             config=self.preservation_config,
+            transformation_field=transformation_field,
         )
         source_consistency = build_source_consistency_field(aux_tensor["latent_drift"])
 
