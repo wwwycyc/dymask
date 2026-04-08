@@ -65,6 +65,23 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
     ) -> torch.Tensor:
         return prev_latents
 
+    def _compose_effective_mask_from_aux(
+        self,
+        method_name: str,
+        dynamic_mask: torch.Tensor,
+        aux_tensor: dict[str, torch.Tensor],
+        roi_mask: torch.Tensor | None,
+        step_idx: int,
+        total_steps: int,
+    ) -> torch.Tensor:
+        return self._compose_effective_mask(
+            method_name,
+            dynamic_mask,
+            roi_mask,
+            step_idx,
+            total_steps,
+        )
+
     def _step_latents_from_mask(
         self,
         method_name: str,
@@ -159,9 +176,10 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                     step_idx=0,
                     total_steps=total_steps,
                 )
-                support_evidence = self._compose_effective_mask(
+                support_evidence = self._compose_effective_mask_from_aux(
                     method_name,
                     dynamic_mask,
+                    _aux_tensor,
                     roi_mask,
                     step_idx=0,
                     total_steps=total_steps,
@@ -287,9 +305,10 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                     step_idx=step_idx,
                     total_steps=total_steps,
                 )
-                support_evidence = self._compose_effective_mask(
+                support_evidence = self._compose_effective_mask_from_aux(
                     method_name,
                     dynamic_mask,
+                    aux_tensor,
                     roi_mask,
                     step_idx,
                     total_steps,
