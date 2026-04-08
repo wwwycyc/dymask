@@ -65,6 +65,16 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
     ) -> torch.Tensor:
         return prev_latents
 
+    def _finalize_step_aux_tensor(
+        self,
+        method_name: str,
+        aux_tensor: dict[str, torch.Tensor],
+        roi_mask: torch.Tensor | None,
+        step_idx: int,
+        total_steps: int,
+    ) -> dict[str, torch.Tensor]:
+        return aux_tensor
+
     def _compose_effective_mask_from_aux(
         self,
         method_name: str,
@@ -351,6 +361,13 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                 prev_latents=prev_latents,
                 roi_mask=roi_mask,
                 source_latents=source_latents,
+                step_idx=step_idx,
+                total_steps=total_steps,
+            )
+            aux_tensor = self._finalize_step_aux_tensor(
+                method_name=method_name,
+                aux_tensor=aux_tensor,
+                roi_mask=roi_mask,
                 step_idx=step_idx,
                 total_steps=total_steps,
             )
