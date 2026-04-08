@@ -177,6 +177,51 @@ Important recent commits:
 - `6a9c11e` source-anchor + soft ROI
 - `503a4b3` source-anchor + decoder feature injection
 
+## 2026-04-08 mechanistic update
+Current mechanistic branch:
+- `exp/proedit-mechanistic-rewrite`
+
+New files:
+- `DyMask/conflict_gated_feature_mix.py`
+- `DyMask/v1_source_prompt_source_anchored_hard_roi_conflict_gated_mix.py`
+- `DyMask/run_v1_source_prompt_source_anchored_hard_roi_conflict_gated_mix.py`
+
+Mechanism:
+- keep `DiffEdit hard ROI` as support
+- keep `outside source anchoring`
+- replace constant inside target-relax with `inside rewrite gain` gated by source-target feature conflict
+- keep `outside source pull`
+
+Important correction:
+- the aborted local run `scratch_conflict_gated_mix_runs\sp_anchor_conflict_gated\sp_anchor_conflict_gated_20260408-2220` is invalid
+- it accidentally ran on the parquet dataset and defaulted to all methods
+- do not use that run for any comparison
+
+The runner has been fixed so that its defaults are now:
+- `--piebench-path assets\PIE-Bench`
+- `--methods full_dynamic_mask`
+
+Recommended server command:
+```powershell
+E:\Anaconda_envs\envs\imgedit\python.exe D:\Program\dymask\DyMask\run_v1_source_prompt_source_anchored_hard_roi_conflict_gated_mix.py `
+  --piebench-path D:\Program\dymask\assets\PIE-Bench `
+  --row-indices 165 162 273 275 346 360 411 409 440 423 468 490 510 521 `
+  --sample-count 8 `
+  --run-limit 14 `
+  --phase custom `
+  --methods full_dynamic_mask `
+  --num-inversion-steps 10 `
+  --num-edit-steps 10 `
+  --inversion-backend ddim `
+  --disable-batch-warmup-probe `
+  --mix-inside-rewrite-gain-strength 0.05 `
+  --mix-outside-source-strength 0.15
+```
+
+Comparison targets:
+- `scratch_source_anchor_hard_roi_runs\sp_anchor_hard_roi\sp_anchor_hard_roi_20260408-2055`
+- `scratch_proedit_like_runs\sp_anchor_proedit_like\sp_anchor_proedit_like_20260408-2147`
+
 Recommended checkout anchors:
 - `680346a`
   - strongest current hard-ROI baseline
