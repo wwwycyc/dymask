@@ -34,7 +34,7 @@
   "balanced_14_row_indices": [
     165,
     162,
-    262,
+    273,
     275,
     346,
     360,
@@ -65,12 +65,12 @@
       "editing_instruction": "Replace the vase with a plant"
     },
     {
-      "row_index": 262,
-      "key": "221000000002",
-      "image_path": "2_add_object_80/2_natural/1_animal/221000000002.jpg",
+      "row_index": 273,
+      "key": "222000000003",
+      "image_path": "2_add_object_80/2_natural/2_human/222000000003.jpg",
       "task_family": "add_object",
-      "gt_area_ratio": 0.1414,
-      "editing_instruction": "make the cat wear a hat"
+      "gt_area_ratio": 0.1168,
+      "editing_instruction": "Add a backpack to the woman"
     },
     {
       "row_index": 275,
