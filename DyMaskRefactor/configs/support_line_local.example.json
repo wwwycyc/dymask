@@ -1,0 +1,36 @@
+{
+  "variant": "c5h4",
+  "piebench_path": "/abs/path/to/PIE-Bench",
+  "output_root": "runs/support_c5h4_full700",
+  "row_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "run_limit": 8,
+  "methods": [
+    "full_dynamic_mask"
+  ],
+  "model_id": "/abs/path/to/sd15-diffusers",
+  "clip_model_id": "/abs/path/to/clip-vit-large-patch14",
+  "ntip2p_root": null,
+  "inversion_backend": "ddim",
+  "num_inversion_steps": 50,
+  "num_edit_steps": 50,
+  "sample_batch_size": 1,
+  "min_sample_batch_size": 1,
+  "enable_tf32": true,
+  "channels_last": true,
+  "allow_download": false,
+  "disable_structure_distance": false,
+  "dino_model_name": "dino_vitb8",
+  "dino_weights_path": "/abs/path/to/dino_vitbase8_pretrain.pth",
+  "dino_global_patch_size": 224,
+  "skip_metrics": false,
+  "log_path": "runs/log_support_refactor.md"
+}

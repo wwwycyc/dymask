@@ -10,6 +10,7 @@ from PIL import Image
 
 from .adapters import configure_ntip2p_module, load_ntip2p_module
 from .config import ExperimentConfig
+from .inversion_cache import maybe_load_inversion_cache_index, prepare_inversion_for_sample
 from .schemas import InversionOutput, MaterializedSample, MethodResult
 from .utils import compose_labeled_overview, save_csv_records, save_image, save_json
 
@@ -238,20 +239,17 @@ class P2PEditor:
         if not samples:
             return {}
 
+        cache_index = maybe_load_inversion_cache_index(self.config.runtime)
         results: dict[str, tuple[InversionOutput, list[MethodResult]]] = {}
         for sample in samples:
-            source_image = self._load_sample_image(sample.source_image_path)
-            try:
-                inversion = self.inversion_backend.invert(source_image, source_prompt=sample.source_prompt)
-            except TypeError:
-                inversion = self.inversion_backend.invert(source_image)
-
-            save_image(sample.sample_dir / "source_reconstruction.png", inversion.reconstruction_image)
-            save_json(sample.sample_dir / "inversion.json", inversion.metadata)
-            if self.config.save_inversion_tensors:
-                torch.save(inversion.zt_src.detach().cpu(), sample.sample_dir / "zt_src.pt")
-                torch.save([latent.detach().cpu() for latent in inversion.src_latents], sample.sample_dir / "src_latents.pt")
-
+            inversion = prepare_inversion_for_sample(
+                sample=sample,
+                runtime=self.config.runtime,
+                load_source_image=self._load_sample_image,
+                inversion_backend=self.inversion_backend,
+                save_tensors=bool(self.config.save_inversion_tensors),
+                cache_index=cache_index,
+            )
             method_result = self._run_p2p(sample, inversion)
             results[sample.sample_id] = (inversion, [method_result])
         return results

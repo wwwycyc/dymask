@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.cache/
+_smoke_runs/
+runs/
+*.log
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors

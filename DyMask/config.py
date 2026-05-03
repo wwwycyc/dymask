@@ -10,6 +10,8 @@ class RuntimeConfig:
     model_id: str = "runwayml/stable-diffusion-v1-5"
     clip_model_id: str = "openai/clip-vit-large-patch14"
     inversion_backend: str = "ddim"
+    inversion_cache_run_dir: Path | None = None
+    require_inversion_cache: bool = False
     device: str = "cuda"
     dtype: str = "float16"
     image_size: int = 512

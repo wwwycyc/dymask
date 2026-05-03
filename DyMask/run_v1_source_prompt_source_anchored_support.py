@@ -39,6 +39,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--mask-thresholding-ratio", type=float, default=3.0)
     parser.add_argument("--inpaint-strength", type=float, default=1.0)
     parser.add_argument("--support-rho", type=float, default=0.70)
+    parser.add_argument("--soft-roi-start-weight", type=float, default=0.75)
+    parser.add_argument("--soft-roi-end-weight", type=float, default=0.10)
+    parser.add_argument("--anchor-hardness-start", type=float, default=0.35)
+    parser.add_argument("--anchor-hardness-end", type=float, default=1.0)
     args = parser.parse_args(argv_list)
     if not _has_output_root_arg(argv_list):
         args.output_root = "scratch_source_anchor_runs/dymask_v1_source_prompt_source_anchored_support"
@@ -61,14 +65,19 @@ def main(argv: list[str] | None = None) -> None:
     save_json(
         run_dir / "variant.json",
         {
-            "variant_name": "source_prompt_source_anchored_support_v1",
+            "variant_name": "source_prompt_source_anchored_support_adaptive_v1",
             "ddim_inversion_prompt_mode": "source_prompt",
             "reference_branch_prompt_mode": "source_prompt",
             "attention_prompt_mode": "target_prompt",
             "support_rho": float(args.support_rho),
-            "mechanism": "Hard ROI bounded temporal support with outside-roi source latent anchoring",
+            "soft_roi_start_weight": float(args.soft_roi_start_weight),
+            "soft_roi_end_weight": float(args.soft_roi_end_weight),
+            "anchor_hardness_start": float(args.anchor_hardness_start),
+            "anchor_hardness_end": float(args.anchor_hardness_end),
+            "mechanism": "Adaptive temporal support blended with soft ROI and scheduled outside-roi source latent anchoring",
             "support_update": "S_t = rho * S_{t-1} + (1-rho) * (roi_mask * dynamic_mask), S_0 = roi_mask * dynamic_mask",
-            "background_anchor": "z_{t-1} = roi_mask * z_{t-1}^{edit} + (1-roi_mask) * z_{t-1}^{src}",
+            "adaptive_mask": "M_t = (1-w_t) * S_t + w_t * roi_soft, w_t follows cosine decay from soft_roi_start_weight to soft_roi_end_weight",
+            "background_anchor": "z_{t-1} = A_t * z_{t-1}^{edit} + (1-A_t) * z_{t-1}^{src}, A_t = lerp(roi_soft, roi_hard, h_t)",
             "diffedit": diffedit_config.to_dict(),
         },
     )
@@ -101,6 +110,10 @@ def main(argv: list[str] | None = None) -> None:
             "methods": list(config.methods),
             "run_dir": str(run_dir),
             "support_rho": float(args.support_rho),
+            "soft_roi_start_weight": float(args.soft_roi_start_weight),
+            "soft_roi_end_weight": float(args.soft_roi_end_weight),
+            "anchor_hardness_start": float(args.anchor_hardness_start),
+            "anchor_hardness_end": float(args.anchor_hardness_end),
             "diffedit": diffedit_config.to_dict(),
         },
         result={"sample_ids": [sample.sample_id for sample in materialized_samples]},
@@ -119,6 +132,10 @@ def main(argv: list[str] | None = None) -> None:
         pipe,
         config,
         support_rho=args.support_rho,
+        soft_roi_start_weight=args.soft_roi_start_weight,
+        soft_roi_end_weight=args.soft_roi_end_weight,
+        anchor_hardness_start=args.anchor_hardness_start,
+        anchor_hardness_end=args.anchor_hardness_end,
         diffedit_config=diffedit_config,
         inversion_backend=inversion_backend,
     )
@@ -169,7 +186,7 @@ def main(argv: list[str] | None = None) -> None:
                 "diagnostics_csv_path": str(result.diagnostics_csv_path),
                 "diagnostics_json_path": str(result.diagnostics_json_path),
                 "debug_json_path": str(result.debug_json_path),
-                "variant": "source_prompt_source_anchored_support_v1",
+                "variant": "source_prompt_source_anchored_support_adaptive_v1",
             }
             if metric_runner is not None:
                 metrics_row = metric_runner.evaluate_case(

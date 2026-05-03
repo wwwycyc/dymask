@@ -1,0 +1,247 @@
+from __future__ import annotations
+
+import numpy as np
+import torch
+
+from .adapters import clear_cuda_memory
+from .schemas import InversionOutput, MaterializedSample, MethodResult, TextCondition
+from .v1 import DynamicMaskBuilder, aggregate_step_cross_attention
+from .v1_source_prompt import V1SourcePromptEditor
+
+
+class V1SourcePromptValidatedRevocableStateV2Editor(V1SourcePromptEditor):
+    def __init__(
+        self,
+        pipe,
+        config,
+        support_rho: float = 0.85,
+        support_decay_mu: float = 0.80,
+        support_decay_lambda: float = 0.10,
+        support_lambda: float = 0.50,
+        support_kappa: float = 8.0,
+        support_alpha: float = 8.0,
+        support_delta: float = 0.35,
+        outside_veto_strength: float = 1.0,
+        inversion_backend=None,
+    ) -> None:
+        super().__init__(pipe, config, inversion_backend=inversion_backend)
+        self.support_rho = float(support_rho)
+        self.support_decay_mu = float(support_decay_mu)
+        self.support_decay_lambda = float(support_decay_lambda)
+        self.support_lambda = float(support_lambda)
+        self.support_kappa = float(support_kappa)
+        self.support_alpha = float(support_alpha)
+        self.support_delta = float(support_delta)
+        self.outside_veto_strength = float(outside_veto_strength)
+
+    def _reference_prompt_metadata(self, sample: MaterializedSample) -> dict[str, object]:
+        payload = super()._reference_prompt_metadata(sample)
+        payload.update(
+            {
+                "variant": "source_prompt_validated_revocable_state_v2",
+                "support_rho": self.support_rho,
+                "support_decay_mu": self.support_decay_mu,
+                "support_decay_lambda": self.support_decay_lambda,
+                "support_lambda": self.support_lambda,
+                "support_kappa": self.support_kappa,
+                "support_alpha": self.support_alpha,
+                "support_delta": self.support_delta,
+                "outside_veto_strength": self.outside_veto_strength,
+                "support_update": (
+                    "Q_t = mu * Q_{t-1} + (1-mu) * (1-E_t), "
+                    "S_t = rho * S_{t-1} + (1-rho) * E_t - lambda * Q_t * S_{t-1}, "
+                    "M_t = zero_floor(sigmoid(alpha * (S_t - delta))) * outside_veto"
+                ),
+                "support_redefinition": "E_t = dynamic_mask * sigmoid(kappa * (g_t - h_t))",
+            }
+        )
+        return payload
+
+    @staticmethod
+    def _uses_support_state(method_name: str) -> bool:
+        if method_name == "target_only":
+            return False
+        return not str(method_name).startswith("global_blend")
+
+    def _support_consistent_map(self, method_name: str, dynamic_mask: torch.Tensor, attention: torch.Tensor) -> torch.Tensor:
+        if method_name in {"discrepancy_attention", "full_dynamic_mask"}:
+            return torch.clamp(self.support_lambda * attention + (1.0 - self.support_lambda) * dynamic_mask, 0.0, 1.0)
+        return torch.clamp(dynamic_mask, 0.0, 1.0)
+
+    def _support_inconsistent_map(self, method_name: str, dynamic_mask: torch.Tensor, attention: torch.Tensor, latent_drift: torch.Tensor) -> torch.Tensor:
+        if method_name in {"discrepancy_attention", "full_dynamic_mask"}:
+            return torch.clamp((1.0 - dynamic_mask) * (1.0 - attention), 0.0, 1.0)
+        if method_name == "discrepancy_latent":
+            return torch.clamp(latent_drift * (1.0 - dynamic_mask), 0.0, 1.0)
+        return torch.clamp(1.0 - dynamic_mask, 0.0, 1.0)
+
+    def _support_evidence(self, method_name: str, dynamic_mask: torch.Tensor, aux_tensor: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        attention = aux_tensor["attention"]
+        latent_drift = aux_tensor["latent_drift"]
+        support_consistent = self._support_consistent_map(method_name, dynamic_mask, attention)
+        support_inconsistent = self._support_inconsistent_map(method_name, dynamic_mask, attention, latent_drift)
+        support_probability = torch.sigmoid(self.support_kappa * (support_consistent - support_inconsistent))
+        support_evidence = dynamic_mask * support_probability
+        return support_consistent, support_inconsistent, support_probability, support_evidence
+
+    def _initialize_support_states(self, evidence: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        support_state = torch.clamp(evidence, 0.0, 1.0)
+        low_evidence_state = torch.clamp(1.0 - evidence, 0.0, 1.0)
+        return support_state, low_evidence_state
+
+    def _update_support_states(self, previous_state: torch.Tensor | None, previous_low_evidence_state: torch.Tensor | None, evidence: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        evidence = torch.clamp(evidence, 0.0, 1.0)
+        if previous_state is None or previous_low_evidence_state is None:
+            return self._initialize_support_states(evidence)
+        low_evidence_state = self.support_decay_mu * previous_low_evidence_state + (1.0 - self.support_decay_mu) * (1.0 - evidence)
+        support_state = self.support_rho * previous_state + (1.0 - self.support_rho) * evidence - self.support_decay_lambda * low_evidence_state * previous_state
+        support_state = torch.clamp(support_state, 0.0, 1.0)
+        low_evidence_state = torch.clamp(low_evidence_state, 0.0, 1.0)
+        return support_state, low_evidence_state
+
+    def _zero_floor_mask(self, support_state: torch.Tensor) -> torch.Tensor:
+        raw = torch.sigmoid(self.support_alpha * (support_state - self.support_delta))
+        floor = torch.sigmoid(torch.tensor(-self.support_alpha * self.support_delta, device=raw.device, dtype=raw.dtype))
+        return torch.clamp((raw - floor) / (1.0 - floor).clamp(min=1e-6), 0.0, 1.0)
+
+    def _outside_veto(self, support_inconsistent: torch.Tensor) -> torch.Tensor:
+        return torch.clamp(1.0 - self.outside_veto_strength * support_inconsistent, 0.0, 1.0)
+
+    def _effective_mask_from_state(self, support_state: torch.Tensor, support_inconsistent: torch.Tensor) -> torch.Tensor:
+        return self._zero_floor_mask(support_state) * self._outside_veto(support_inconsistent)
+
+    @torch.no_grad()
+    def _probe_method_batch_memory(self, samples, inversions, target_conditions, method_name):
+        if not samples:
+            return
+        self._set_timesteps()
+        self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
+        latents = torch.cat([inv.zt_src.detach().clone().to(self.pipe.device, dtype=self.pipe.unet.dtype) for inv in inversions], dim=0)
+        source_latents = torch.cat([self._resample_source_latents([latent.to(self.pipe.device, dtype=self.pipe.unet.dtype) for latent in inv.src_latents], len(self.pipe.scheduler.timesteps))[0] for inv in inversions], dim=0)
+        builder = DynamicMaskBuilder(self.config.mask, method_name)
+        builder.reset()
+        focus_masks = torch.cat([self._build_focus_token_mask(cond, self._extract_focus_terms(sample)).to(self.pipe.device) for sample, cond in zip(samples, target_conditions)], dim=0)
+        target_embeddings = torch.cat([cond.embeddings.to(self.pipe.device, dtype=self.pipe.unet.dtype) for cond in target_conditions], dim=0)
+        source_conditions = self._encode_source_conditions(samples)
+        source_embeddings = torch.cat([cond.embeddings.to(self.pipe.device, dtype=self.pipe.unet.dtype) for cond in source_conditions], dim=0)
+        timestep = self.pipe.scheduler.timesteps[0]
+        total_steps = len(self.pipe.scheduler.timesteps)
+        try:
+            self.attention_store.reset()
+            eps_src = self.source_predictor.predict(latents, timestep, source_embeddings)
+            self.attention_store.reset()
+            eps_tar, target_noise, _noise_uncond, _ = self.target_predictor.predict(latents, timestep, target_embeddings)
+            attention_map = aggregate_step_cross_attention(self.attention_store, focus_masks, target_hw=(latents.shape[-2], latents.shape[-1]), locations=self.config.mask.attention_locations)
+            if not self._uses_support_state(method_name):
+                if method_name == "target_only":
+                    effective_mask = torch.ones_like(eps_src[:, :1])
+                    eps = eps_tar
+                else:
+                    effective_mask, _aux_tensor = builder.build(eps_src, target_noise, latents, source_latents, attention_map, step_idx=0, total_steps=total_steps)
+                    eps = eps_src + effective_mask * (eps_tar - eps_src)
+            else:
+                dynamic_mask, aux_tensor = builder.build(eps_src, target_noise, latents, source_latents, attention_map, step_idx=0, total_steps=total_steps)
+                _support_consistent, support_inconsistent, _support_probability, support_evidence = self._support_evidence(method_name, dynamic_mask, aux_tensor)
+                support_state, _low_evidence_state = self._update_support_states(None, None, support_evidence)
+                effective_mask = self._effective_mask_from_state(support_state, support_inconsistent)
+                eps = eps_src + effective_mask * (eps_tar - eps_src)
+            probe_latents = self.pipe.scheduler.step(eps, timestep, latents).prev_sample
+            _ = self._decode_latents_batch(probe_latents)
+        finally:
+            self.attention_store.reset()
+            clear_cuda_memory()
+
+    def _run_method_batch(self, samples, method_name, inversions, target_conditions):
+        self._set_timesteps()
+        self.ntip2p.ptp_utils.register_attention_control(self.pipe, self.attention_store)
+        batch_size = len(samples)
+        latents = torch.cat([inv.zt_src.detach().clone().to(self.pipe.device, dtype=self.pipe.unet.dtype) for inv in inversions], dim=0)
+        source_latent_sequences = [self._resample_source_latents([latent.to(self.pipe.device, dtype=self.pipe.unet.dtype) for latent in inv.src_latents], len(self.pipe.scheduler.timesteps)) for inv in inversions]
+        source_latents = [torch.cat([seq[step_idx] for seq in source_latent_sequences], dim=0) for step_idx in range(len(self.pipe.scheduler.timesteps))]
+        builder = DynamicMaskBuilder(self.config.mask, method_name)
+        builder.reset()
+        focus_masks = torch.cat([self._build_focus_token_mask(cond, self._extract_focus_terms(sample)).to(self.pipe.device) for sample, cond in zip(samples, target_conditions)], dim=0)
+        target_embeddings = torch.cat([cond.embeddings.to(self.pipe.device, dtype=self.pipe.unet.dtype) for cond in target_conditions], dim=0)
+        source_conditions = self._encode_source_conditions(samples)
+        source_embeddings = torch.cat([cond.embeddings.to(self.pipe.device, dtype=self.pipe.unet.dtype) for cond in source_conditions], dim=0)
+        aux_histories = [[] for _ in range(batch_size)]
+        trace_histories = [[] for _ in range(batch_size)]
+        total_steps = len(self.pipe.scheduler.timesteps)
+        support_state = None
+        low_evidence_state = None
+        for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
+            source_latent = source_latents[step_idx]
+            self.attention_store.reset()
+            eps_src = self.source_predictor.predict(latents, timestep, source_embeddings)
+            self.attention_store.reset()
+            eps_tar, target_noise, _noise_uncond, target_stats = self.target_predictor.predict(latents, timestep, target_embeddings)
+            timestep_value = int(timestep.item()) if hasattr(timestep, 'item') else int(timestep)
+            attention_map = aggregate_step_cross_attention(self.attention_store, focus_masks, target_hw=(latents.shape[-2], latents.shape[-1]), locations=self.config.mask.attention_locations)
+            if not self._uses_support_state(method_name):
+                if method_name == 'target_only':
+                    aux_tensor = builder._compute_aux_maps(eps_src, target_noise, latents, source_latent, attention_map)
+                    effective_mask = torch.ones_like(eps_src[:, :1])
+                    eps = eps_tar
+                else:
+                    effective_mask, aux_tensor = builder.build(eps_src, target_noise, latents, source_latent, attention_map, step_idx=step_idx, total_steps=total_steps)
+                    eps = eps_src + effective_mask * (eps_tar - eps_src)
+                support_evidence = effective_mask
+                support_consistent = effective_mask
+                support_inconsistent = 1.0 - effective_mask
+                support_probability = effective_mask
+                support_state = effective_mask
+                low_evidence_state = 1.0 - effective_mask
+                dynamic_mask = effective_mask
+                aux_tensor['mask'] = effective_mask
+            else:
+                dynamic_mask, aux_tensor = builder.build(eps_src, target_noise, latents, source_latent, attention_map, step_idx=step_idx, total_steps=total_steps)
+                support_consistent, support_inconsistent, support_probability, support_evidence = self._support_evidence(method_name, dynamic_mask, aux_tensor)
+                support_state, low_evidence_state = self._update_support_states(support_state, low_evidence_state, support_evidence)
+                effective_mask = self._effective_mask_from_state(support_state, support_inconsistent)
+                eps = eps_src + effective_mask * (eps_tar - eps_src)
+                aux_tensor['mask'] = effective_mask
+            aux_tensor['dynamic_mask'] = dynamic_mask
+            aux_tensor['support_consistent'] = support_consistent
+            aux_tensor['support_inconsistent'] = support_inconsistent
+            aux_tensor['support_probability'] = support_probability
+            aux_tensor['support_evidence'] = support_evidence
+            aux_tensor['support_state'] = support_state
+            aux_tensor['low_evidence_state'] = low_evidence_state
+            delta_values = target_stats.get('delta_per_sample', [])
+            mean_delta = float(np.mean(delta_values)) if delta_values else float(target_stats['delta'])
+            sample_ids = ','.join(sample.sample_id for sample in samples)
+            print(f'[{method_name}][batch={batch_size}][{sample_ids}] {step_idx} {timestep_value} {mean_delta:.6f}')
+            discrepancy_gap = torch.abs(target_noise - eps_src).flatten(1).mean(dim=1)
+            src_tar_gap = torch.abs(eps_tar - eps_src).flatten(1).mean(dim=1)
+            applied_gap = torch.abs(eps - eps_src).flatten(1).mean(dim=1)
+            blend_strength = torch.where(src_tar_gap > 1e-8, applied_gap / src_tar_gap, torch.zeros_like(applied_gap))
+            gamma_t = builder.latent_weight_for_step(step_idx=step_idx, total_steps=total_steps)
+            scheduler_output = self.pipe.scheduler.step(eps, timestep, latents)
+            latents = scheduler_output.prev_sample
+            for sample_idx in range(batch_size):
+                delta = float(delta_values[sample_idx]) if sample_idx < len(delta_values) else float(target_stats['delta'])
+                trace_histories[sample_idx].append({
+                    'step_idx': step_idx,
+                    'timestep': timestep_value,
+                    'delta': delta,
+                    'discrepancy_gap': float(discrepancy_gap[sample_idx].item()),
+                    'src_tar_gap': float(src_tar_gap[sample_idx].item()),
+                    'applied_gap': float(applied_gap[sample_idx].item()),
+                    'blend_strength': float(blend_strength[sample_idx].item()),
+                    'gamma_t': gamma_t,
+                    'support_evidence_mean': float(support_evidence[sample_idx].mean().item()),
+                    'support_state_mean': float(support_state[sample_idx].mean().item()),
+                    'low_evidence_state_mean': float(low_evidence_state[sample_idx].mean().item()),
+                    'support_probability_mean': float(support_probability[sample_idx].mean().item()),
+                    'support_inconsistent_mean': float(support_inconsistent[sample_idx].mean().item()),
+                    'effective_mask_mean': float(effective_mask[sample_idx].mean().item()),
+                })
+                aux_numpy = {k: v[sample_idx, 0].detach().float().cpu().numpy() for k, v in aux_tensor.items() if isinstance(v, torch.Tensor)}
+                aux_histories[sample_idx].append(aux_numpy)
+        edited_images = self._decode_latents_batch(latents)
+        results = []
+        for sample_idx, sample in enumerate(samples):
+            results.append(self._finalize_method_result(sample=sample, method_name=method_name, edited_image=edited_images[sample_idx], aux_history=aux_histories[sample_idx], trace_rows=trace_histories[sample_idx], inversion=inversions[sample_idx]))
+        if self.config.runtime.clear_cuda_cache_between_methods:
+            clear_cuda_memory()
+        return results

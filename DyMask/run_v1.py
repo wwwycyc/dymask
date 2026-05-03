@@ -64,6 +64,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model-id", default="runwayml/stable-diffusion-v1-5")
     parser.add_argument("--clip-model-id", default="openai/clip-vit-large-patch14")
     parser.add_argument("--inversion-backend", choices=["ddim", "nti"], default="ddim")
+    parser.add_argument(
+        "--inversion-cache-run-dir",
+        default=None,
+        help="Reuse inversion tensors from an existing run directory when sample identities and inversion settings match.",
+    )
+    parser.add_argument(
+        "--require-inversion-cache",
+        action="store_true",
+        help="Fail instead of recomputing when --inversion-cache-run-dir is provided but a compatible cached inversion is unavailable.",
+    )
     parser.add_argument("--image-size", type=int, default=512)
     parser.add_argument("--num-ddim-steps", type=int, default=10, help="Legacy alias: sets both inversion and edit steps unless overridden.")
     parser.add_argument("--num-inversion-steps", type=int, default=None)
@@ -107,7 +117,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--selected-step-count", type=int, default=5)
     parser.add_argument("--selected-step-stride", type=int, default=None, help="Save feature maps every N edit steps.")
-    parser.add_argument("--save-inversion-tensors", action="store_true")
+    parser.add_argument(
+        "--save-inversion-tensors",
+        action="store_true",
+        help="Save zt_src/src_latents (and NTI null embeddings when present) so later runs can reuse the inversion.",
+    )
     return parser
 
 
@@ -131,6 +145,9 @@ def resolve_methods(args: argparse.Namespace) -> tuple[str, ...]:
 
 
 def build_config(args: argparse.Namespace) -> ExperimentConfig:
+    if args.require_inversion_cache and not args.inversion_cache_run_dir:
+        raise ValueError('--require-inversion-cache requires --inversion-cache-run-dir.')
+
     config = ExperimentConfig()
     legacy_steps = args.num_ddim_steps
     config.phase = args.phase
@@ -143,6 +160,8 @@ def build_config(args: argparse.Namespace) -> ExperimentConfig:
     config.runtime.model_id = args.model_id
     config.runtime.clip_model_id = args.clip_model_id
     config.runtime.inversion_backend = args.inversion_backend
+    config.runtime.inversion_cache_run_dir = Path(args.inversion_cache_run_dir) if args.inversion_cache_run_dir else None
+    config.runtime.require_inversion_cache = bool(args.require_inversion_cache)
     config.runtime.image_size = args.image_size
     config.runtime.num_inversion_steps = args.num_inversion_steps if args.num_inversion_steps is not None else legacy_steps
     config.runtime.num_edit_steps = args.num_edit_steps if args.num_edit_steps is not None else legacy_steps

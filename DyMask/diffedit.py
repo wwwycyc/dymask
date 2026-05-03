@@ -18,6 +18,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from .adapters import clear_cuda_memory
 from .config import ExperimentConfig, RuntimeConfig
+from .inversion_cache import maybe_load_inversion_cache_index, prepare_inversion_for_sample
 from .schemas import InversionOutput, MaterializedSample, MethodResult
 from .utils import compose_labeled_overview, mask_to_rgb, save_csv_records, save_image, save_json
 from .v1 import V1Editor as BaseV1Editor
@@ -512,21 +513,18 @@ class DiffEditEditor:
         if not samples:
             return {}
 
+        cache_index = maybe_load_inversion_cache_index(self.config.runtime)
         prepared: list[tuple[MaterializedSample, InversionOutput]] = []
         for sample in samples:
-            source_image = self._load_sample_image(sample.source_image_path)
-            try:
-                inversion = self.inversion_backend.invert(source_image, source_prompt=sample.source_prompt)
-            except TypeError:
-                inversion = self.inversion_backend.invert(source_image)
-            finally:
-                self._restore_default_attention_processors()
-
-            save_image(sample.sample_dir / "source_reconstruction.png", inversion.reconstruction_image)
-            save_json(sample.sample_dir / "inversion.json", inversion.metadata)
-            if self.config.save_inversion_tensors:
-                torch.save(inversion.zt_src.detach().cpu(), sample.sample_dir / "zt_src.pt")
-                torch.save([latent.detach().cpu() for latent in inversion.src_latents], sample.sample_dir / "src_latents.pt")
+            inversion = prepare_inversion_for_sample(
+                sample=sample,
+                runtime=self.config.runtime,
+                load_source_image=self._load_sample_image,
+                inversion_backend=self.inversion_backend,
+                save_tensors=bool(self.config.save_inversion_tensors),
+                cache_index=cache_index,
+                on_after_invert=self._restore_default_attention_processors,
+            )
             prepared.append((sample, inversion))
 
         results: dict[str, tuple[InversionOutput, list[MethodResult]]] = {

@@ -1,0 +1,2 @@
+[console_scripts]
+dymask-support = DyMaskRefactor.support_line.runner:main

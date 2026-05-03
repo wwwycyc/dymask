@@ -32,10 +32,31 @@ def load_config_payload(run_dir: Path) -> dict:
     raise KeyError(f"Unsupported config.json schema in {run_dir}")
 
 
-def build_runtime_and_metrics(run_dir: Path) -> tuple[dict, RuntimeConfig, MetricConfig]:
+def build_runtime_and_metrics(
+    run_dir: Path,
+    *,
+    model_id_override: str | None = None,
+    clip_model_id_override: str | None = None,
+    piebench_path_override: str | None = None,
+    device_override: str | None = None,
+) -> tuple[dict, RuntimeConfig, MetricConfig]:
     payload = load_config_payload(run_dir)
-    runtime = RuntimeConfig(**payload["runtime"])
-    metrics = MetricConfig(**payload["metrics"])
+    runtime_payload = dict(payload["runtime"])
+    metrics_payload = dict(payload["metrics"])
+    sampling_payload = dict(payload.get("sampling") or {})
+
+    if model_id_override:
+        runtime_payload["model_id"] = model_id_override
+    if clip_model_id_override:
+        runtime_payload["clip_model_id"] = clip_model_id_override
+    if piebench_path_override:
+        sampling_payload["piebench_path"] = piebench_path_override
+        payload["sampling"] = sampling_payload
+    if device_override:
+        runtime_payload["device"] = device_override
+
+    runtime = RuntimeConfig(**runtime_payload)
+    metrics = MetricConfig(**metrics_payload)
     return payload, runtime, metrics
 
 
@@ -81,13 +102,23 @@ def resolve_gt_mask(sample_meta: dict[str, object], piebench_dataset: PIEBenchDa
 def main() -> None:
     parser = argparse.ArgumentParser(description="Backfill metrics for an existing run directory.")
     parser.add_argument("run_dir", help="Run directory under runs/dymask_v1.")
+    parser.add_argument("--model-id", dest="model_id", default=None)
+    parser.add_argument("--clip-model-id", dest="clip_model_id", default=None)
+    parser.add_argument("--piebench-path", dest="piebench_path", default=None)
+    parser.add_argument("--device", dest="device", default=None)
     args = parser.parse_args()
 
     run_dir = Path(args.run_dir)
     if not run_dir.exists():
         raise FileNotFoundError(f"Run directory not found: {run_dir}")
 
-    config_payload, runtime, metrics = build_runtime_and_metrics(run_dir)
+    config_payload, runtime, metrics = build_runtime_and_metrics(
+        run_dir,
+        model_id_override=args.model_id,
+        clip_model_id_override=args.clip_model_id,
+        piebench_path_override=args.piebench_path,
+        device_override=args.device,
+    )
     metric_runner = MetricRunner(runtime, metrics)
     piebench_dataset = maybe_build_piebench_dataset(config_payload)
     methods = tuple(config_payload.get("methods") or ())

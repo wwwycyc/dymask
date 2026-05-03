@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dymask-refactor"
+version = "0.1.0"
+description = "Standalone refactor of DyMask support-line experiments"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy==2.2.5",
+  "pandas==2.3.3",
+  "pyarrow==23.0.1",
+  "Pillow==12.0.0",
+  "scikit-image==0.25.2",
+  "torch==2.5.1",
+  "torchvision==0.20.1",
+  "diffusers==0.37.1",
+  "transformers==5.4.0",
+  "safetensors==0.7.0",
+  "accelerate",
+  "lpips",
+  "opencv-python",
+  "ipython",
+  "tensorboard",
+  "tqdm",
+]
+
+[project.scripts]
+dymask-support = "DyMaskRefactor.support_line.runner:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["DyMaskRefactor"]

@@ -1,0 +1,3 @@
+recursive-include DyMaskRefactor/configs *.json
+recursive-include DyMaskRefactor/third_party/NTIP2P *.py *.md LICENSE requirements.txt
+recursive-include DyMaskRefactor/third_party/dino *.py *.md LICENSE

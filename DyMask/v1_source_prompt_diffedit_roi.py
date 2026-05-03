@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from diffusers import DDIMInverseScheduler, DDIMScheduler, StableDiffusionDiffEditPipeline
+from diffusers.utils.torch_utils import randn_tensor
 from PIL import Image
 
 from .adapters import clear_cuda_memory
@@ -73,7 +74,7 @@ class V1SourcePromptDiffEditRoiEditor(V1SourcePromptEditor):
             {
                 "variant": "source_prompt_diffedit_roi_upperbound_v1",
                 "stage_split_ratio": self.stage_split_ratio,
-                "roi_source": "diffedit_generate_mask",
+                "roi_source": "diffedit_semantic_guidance_map_thresholded_at_0_5",
                 "roi_mask_policy": "early hard roi, late hard roi times dynamic mask",
                 "diffedit_config": self.diffedit_config.to_dict(),
             }
@@ -119,22 +120,116 @@ class V1SourcePromptDiffEditRoiEditor(V1SourcePromptEditor):
         return np.stack([(np.asarray(mask, dtype=np.float32) > 0.5).astype(np.float32) for mask in mask_batch], axis=0)
 
     @torch.no_grad()
-    def _generate_diffedit_roi_batch(self, samples: list[MaterializedSample]) -> torch.Tensor:
+    def _generate_diffedit_soft_mask_batch(self, samples: list[MaterializedSample]) -> np.ndarray:
         self._restore_default_attention_processors()
+        batch_size = len(samples)
+        if batch_size == 0:
+            return np.zeros((0, 0, 0), dtype=np.float32)
+
+        target_prompts = [sample.target_prompt for sample in samples]
+        source_prompts = [sample.source_prompt for sample in samples]
         source_pils = [self._load_sample_pil(sample.source_image_path) for sample in samples]
-        mask_output = self.diffedit_pipe.generate_mask(
-            image=source_pils,
-            source_prompt=[sample.source_prompt for sample in samples],
-            target_prompt=[sample.target_prompt for sample in samples],
-            num_maps_per_mask=self.diffedit_config.num_maps_per_mask,
-            mask_encode_strength=self.diffedit_config.mask_encode_strength,
-            mask_thresholding_ratio=self.diffedit_config.mask_thresholding_ratio,
-            num_inference_steps=self.config.runtime.num_edit_steps,
-            guidance_scale=self.config.runtime.guidance_scale,
-            output_type="np",
+        num_maps_per_mask = self.diffedit_config.num_maps_per_mask
+        guidance_scale = self.config.runtime.guidance_scale
+        do_classifier_free_guidance = guidance_scale > 1.0
+        device = self.diffedit_pipe._execution_device
+
+        self.diffedit_pipe.check_inputs(
+            target_prompts,
+            self.diffedit_config.mask_encode_strength,
+            1,
+            None,
+            None,
+            None,
         )
-        mask_batch = self._normalize_mask_batch(mask_output)
-        roi_masks = self._harden_roi_masks(mask_batch)
+        self.diffedit_pipe.check_source_inputs(
+            source_prompts,
+            None,
+            None,
+            None,
+        )
+
+        target_negative_prompt_embeds, target_prompt_embeds = self.diffedit_pipe.encode_prompt(
+            target_prompts,
+            device,
+            num_maps_per_mask,
+            do_classifier_free_guidance,
+            None,
+            prompt_embeds=None,
+            negative_prompt_embeds=None,
+        )
+        if do_classifier_free_guidance:
+            target_prompt_embeds = torch.cat([target_negative_prompt_embeds, target_prompt_embeds])
+
+        source_negative_prompt_embeds, source_prompt_embeds = self.diffedit_pipe.encode_prompt(
+            source_prompts,
+            device,
+            num_maps_per_mask,
+            do_classifier_free_guidance,
+            None,
+            prompt_embeds=None,
+            negative_prompt_embeds=None,
+        )
+        if do_classifier_free_guidance:
+            source_prompt_embeds = torch.cat([source_negative_prompt_embeds, source_prompt_embeds])
+
+        image = self.diffedit_pipe.image_processor.preprocess(source_pils).repeat_interleave(num_maps_per_mask, dim=0)
+
+        self.diffedit_pipe.scheduler.set_timesteps(self.config.runtime.num_edit_steps, device=device)
+        timesteps, _ = self.diffedit_pipe.get_timesteps(
+            self.config.runtime.num_edit_steps,
+            self.diffedit_config.mask_encode_strength,
+            device,
+        )
+        encode_timestep = timesteps[0]
+
+        image_latents = self.diffedit_pipe.prepare_image_latents(
+            image,
+            batch_size * num_maps_per_mask,
+            self.diffedit_pipe.vae.dtype,
+            device,
+            None,
+        )
+        noise = randn_tensor(image_latents.shape, device=device, dtype=self.diffedit_pipe.vae.dtype)
+        image_latents = self.diffedit_pipe.scheduler.add_noise(image_latents, noise, encode_timestep)
+
+        latent_model_input = torch.cat([image_latents] * (4 if do_classifier_free_guidance else 2))
+        latent_model_input = self.diffedit_pipe.scheduler.scale_model_input(latent_model_input, encode_timestep)
+
+        prompt_embeds = torch.cat([source_prompt_embeds, target_prompt_embeds])
+        noise_pred = self.diffedit_pipe.unet(
+            latent_model_input,
+            encode_timestep,
+            encoder_hidden_states=prompt_embeds,
+            cross_attention_kwargs={},
+        ).sample
+
+        if do_classifier_free_guidance:
+            noise_pred_neg_src, noise_pred_source, noise_pred_uncond, noise_pred_target = noise_pred.chunk(4)
+            noise_pred_source = noise_pred_neg_src + guidance_scale * (noise_pred_source - noise_pred_neg_src)
+            noise_pred_target = noise_pred_uncond + guidance_scale * (noise_pred_target - noise_pred_uncond)
+        else:
+            noise_pred_source, noise_pred_target = noise_pred.chunk(2)
+
+        mask_guidance_map = (
+            torch.abs(noise_pred_target - noise_pred_source)
+            .reshape(batch_size, num_maps_per_mask, *noise_pred_target.shape[-3:])
+            .mean([1, 2])
+        )
+        clamp_magnitude = mask_guidance_map.mean() * self.diffedit_config.mask_thresholding_ratio
+        if clamp_magnitude.item() <= 1e-8:
+            semantic_mask_image = torch.zeros_like(mask_guidance_map)
+        else:
+            semantic_mask_image = mask_guidance_map.clamp(0, clamp_magnitude) / clamp_magnitude
+
+        mask_image = semantic_mask_image.detach().cpu().numpy().astype(np.float32)
+        self.diffedit_pipe.maybe_free_model_hooks()
+        return mask_image
+
+    @torch.no_grad()
+    def _generate_diffedit_roi_batch(self, samples: list[MaterializedSample]) -> torch.Tensor:
+        soft_masks = self._generate_diffedit_soft_mask_batch(samples)
+        roi_masks = (soft_masks > 0.5).astype(np.float32)
         return torch.from_numpy(roi_masks).unsqueeze(1).to(self.pipe.device, dtype=self.pipe.unet.dtype)
 
     def _compose_effective_mask(

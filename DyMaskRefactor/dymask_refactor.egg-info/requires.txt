@@ -1,0 +1,16 @@
+numpy==2.2.5
+pandas==2.3.3
+pyarrow==23.0.1
+Pillow==12.0.0
+scikit-image==0.25.2
+torch==2.5.1
+torchvision==0.20.1
+diffusers==0.37.1
+transformers==5.4.0
+safetensors==0.7.0
+accelerate
+lpips
+opencv-python
+ipython
+tensorboard
+tqdm

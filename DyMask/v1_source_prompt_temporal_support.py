@@ -54,6 +54,16 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
     def _prepare_target_attention_pass(self, step_idx: int, total_steps: int) -> None:
         self.attention_store.reset()
 
+    def _initialize_edit_latents(
+        self,
+        method_name: str,
+        latents: torch.Tensor,
+        roi_mask: torch.Tensor | None,
+        source_latents: list[torch.Tensor],
+        total_steps: int,
+    ) -> torch.Tensor:
+        return latents
+
     def _post_scheduler_step_latents(
         self,
         method_name: str,
@@ -64,6 +74,60 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
         total_steps: int,
     ) -> torch.Tensor:
         return prev_latents
+
+    def _finalize_step_aux_tensor(
+        self,
+        method_name: str,
+        aux_tensor: dict[str, torch.Tensor],
+        roi_mask: torch.Tensor | None,
+        step_idx: int,
+        total_steps: int,
+    ) -> dict[str, torch.Tensor]:
+        return aux_tensor
+
+    def _compose_effective_mask_from_aux(
+        self,
+        method_name: str,
+        dynamic_mask: torch.Tensor,
+        aux_tensor: dict[str, torch.Tensor],
+        roi_mask: torch.Tensor | None,
+        step_idx: int,
+        total_steps: int,
+    ) -> torch.Tensor:
+        return self._compose_effective_mask(
+            method_name,
+            dynamic_mask,
+            roi_mask,
+            step_idx,
+            total_steps,
+        )
+
+    def _effective_mask_from_support_state(
+        self,
+        method_name: str,
+        support_state: torch.Tensor,
+        roi_mask: torch.Tensor | None,
+        step_idx: int,
+        total_steps: int,
+    ) -> torch.Tensor:
+        return support_state
+
+    def _apply_support_rescue(
+        self,
+        method_name: str,
+        previous_support_state: torch.Tensor | None,
+        support_evidence: torch.Tensor,
+        support_state: torch.Tensor,
+        effective_mask: torch.Tensor,
+        dynamic_mask: torch.Tensor,
+        aux_tensor: dict[str, torch.Tensor],
+        roi_mask: torch.Tensor | None,
+        eps_src: torch.Tensor,
+        eps_tar: torch.Tensor,
+        step_idx: int,
+        total_steps: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+        return support_evidence, support_state, effective_mask, {}
 
     def _step_latents_from_mask(
         self,
@@ -120,6 +184,14 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
             ],
             dim=0,
         )
+        total_steps = len(self.pipe.scheduler.timesteps)
+        latents = self._initialize_edit_latents(
+            method_name=method_name,
+            latents=latents,
+            roi_mask=roi_mask,
+            source_latents=source_latents,
+            total_steps=total_steps,
+        )
         target_embeddings = torch.cat(
             [condition.embeddings.to(self.pipe.device, dtype=self.pipe.unet.dtype) for condition in target_conditions],
             dim=0,
@@ -159,14 +231,37 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                     step_idx=0,
                     total_steps=total_steps,
                 )
-                support_evidence = self._compose_effective_mask(
+                support_evidence = self._compose_effective_mask_from_aux(
                     method_name,
                     dynamic_mask,
+                    _aux_tensor,
                     roi_mask,
                     step_idx=0,
                     total_steps=total_steps,
                 )
                 effective_mask = self._update_support_state(None, support_evidence)
+                effective_mask = self._effective_mask_from_support_state(
+                    method_name=method_name,
+                    support_state=effective_mask,
+                    roi_mask=roi_mask,
+                    step_idx=0,
+                    total_steps=total_steps,
+                )
+                support_evidence, _support_state, effective_mask, rescue_aux = self._apply_support_rescue(
+                    method_name=method_name,
+                    previous_support_state=None,
+                    support_evidence=support_evidence,
+                    support_state=effective_mask,
+                    effective_mask=effective_mask,
+                    dynamic_mask=dynamic_mask,
+                    aux_tensor=_aux_tensor,
+                    roi_mask=roi_mask,
+                    eps_src=eps_src,
+                    eps_tar=eps_tar,
+                    step_idx=0,
+                    total_steps=total_steps,
+                )
+                _aux_tensor.update(rescue_aux)
                 eps, probe_latents = self._step_latents_from_mask(
                     method_name=method_name,
                     latents=latents,
@@ -232,6 +327,14 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
             ],
             dim=0,
         )
+        total_steps = len(self.pipe.scheduler.timesteps)
+        latents = self._initialize_edit_latents(
+            method_name=method_name,
+            latents=latents,
+            roi_mask=roi_mask,
+            source_latents=source_latents,
+            total_steps=total_steps,
+        )
         target_embeddings = torch.cat(
             [condition.embeddings.to(self.pipe.device, dtype=self.pipe.unet.dtype) for condition in target_conditions],
             dim=0,
@@ -244,7 +347,6 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
 
         aux_histories: list[list[dict[str, np.ndarray]]] = [[] for _ in range(batch_size)]
         trace_histories: list[list[dict[str, float | int | str]]] = [[] for _ in range(batch_size)]
-        total_steps = len(self.pipe.scheduler.timesteps)
         support_state: torch.Tensor | None = None
 
         for step_idx, timestep in enumerate(self.pipe.scheduler.timesteps):
@@ -270,7 +372,13 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                 dynamic_mask = torch.ones_like(eps_src[:, :1])
                 support_evidence = dynamic_mask
                 support_state = dynamic_mask if support_state is None else dynamic_mask
-                effective_mask = support_state
+                effective_mask = self._effective_mask_from_support_state(
+                    method_name=method_name,
+                    support_state=support_state,
+                    roi_mask=roi_mask,
+                    step_idx=step_idx,
+                    total_steps=total_steps,
+                )
                 aux_tensor["dynamic_mask"] = dynamic_mask
                 aux_tensor["roi_mask"] = roi_mask
                 aux_tensor["support_evidence"] = support_evidence
@@ -287,15 +395,38 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                     step_idx=step_idx,
                     total_steps=total_steps,
                 )
-                support_evidence = self._compose_effective_mask(
+                support_evidence = self._compose_effective_mask_from_aux(
                     method_name,
                     dynamic_mask,
+                    aux_tensor,
                     roi_mask,
                     step_idx,
                     total_steps,
                 )
-                support_state = self._update_support_state(support_state, support_evidence)
-                effective_mask = support_state
+                previous_support_state = support_state
+                support_state = self._update_support_state(previous_support_state, support_evidence)
+                effective_mask = self._effective_mask_from_support_state(
+                    method_name=method_name,
+                    support_state=support_state,
+                    roi_mask=roi_mask,
+                    step_idx=step_idx,
+                    total_steps=total_steps,
+                )
+                support_evidence, support_state, effective_mask, rescue_aux = self._apply_support_rescue(
+                    method_name=method_name,
+                    previous_support_state=previous_support_state,
+                    support_evidence=support_evidence,
+                    support_state=support_state,
+                    effective_mask=effective_mask,
+                    dynamic_mask=dynamic_mask,
+                    aux_tensor=aux_tensor,
+                    roi_mask=roi_mask,
+                    eps_src=eps_src,
+                    eps_tar=eps_tar,
+                    step_idx=step_idx,
+                    total_steps=total_steps,
+                )
+                aux_tensor.update(rescue_aux)
                 aux_tensor["dynamic_mask"] = dynamic_mask
                 aux_tensor["roi_mask"] = roi_mask
                 aux_tensor["support_evidence"] = support_evidence
@@ -335,6 +466,13 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                 step_idx=step_idx,
                 total_steps=total_steps,
             )
+            aux_tensor = self._finalize_step_aux_tensor(
+                method_name=method_name,
+                aux_tensor=aux_tensor,
+                roi_mask=roi_mask,
+                step_idx=step_idx,
+                total_steps=total_steps,
+            )
 
             for sample_idx in range(batch_size):
                 delta = float(delta_values[sample_idx]) if sample_idx < len(delta_values) else float(target_stats["delta"])
@@ -353,6 +491,20 @@ class V1SourcePromptTemporalSupportEditor(V1SourcePromptHardRoiLockedEditor):
                         "roi_mask_mean": float(roi_mask[sample_idx].mean().item()),
                     }
                 )
+                trace_row = trace_histories[sample_idx][-1]
+                for key in (
+                    "underedit_ratio",
+                    "underedit_raw_rescue_mask",
+                    "underedit_rescue_mask",
+                    "underedit_temporal_state",
+                    "underedit_temporal_gate",
+                    "underedit_support_boost",
+                    "underedit_mask_boost",
+                    "underedit_anchor_relax_mask",
+                ):
+                    value = aux_tensor.get(key)
+                    if isinstance(value, torch.Tensor):
+                        trace_row[f"{key}_mean"] = float(value[sample_idx].mean().item())
                 aux_numpy = {
                     key: value[sample_idx, 0].detach().float().cpu().numpy()
                     for key, value in aux_tensor.items()
